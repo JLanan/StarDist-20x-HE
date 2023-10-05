@@ -25,7 +25,7 @@ def get_zarr_dims(zarr_path: str) -> tuple:
 
 
 def initialize_zarrs_for_stardist_wsi_predictions(dims: tuple[int], tile_size: int, overlap: int, model: StarDist2D) \
-        -> (zarr.core.Array, zarr.core.Array, zarr.core.Array):
+        -> tuple[zarr.core.Array, zarr.core.Array, zarr.core.Array]:
     # Initialize zarrs such that the first tile could be entirely covered in nuclei (overlap is ~5 nuclei across)
     safe_estimate = (tile_size / overlap * 5) ** 2
 
@@ -34,4 +34,5 @@ def initialize_zarrs_for_stardist_wsi_predictions(dims: tuple[int], tile_size: i
     z_centroids = zarr.zeros(shape=(safe_estimate, 2), chunks=(tile_size, 2), dtype=np.int32)
     z_vertices = zarr.zeros(shape=(safe_estimate, 2, model.config.n_rays),
                             chunks=(tile_size, 2, model.config.n_rays), dtype=np.int32)
-    return z_label, z_centroids, z_vertices
+    zarrs = (z_label, z_centroids, z_vertices)
+    return zarrs

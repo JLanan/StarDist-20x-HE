@@ -24,11 +24,9 @@ def read_wsi_region(wsi_path: str, level: int, x_mu_cp: float, y_mu_cp: float, w
     return np.asarray(wsi.read_region((left, top), level, (width, height)).convert('RGB'))
 
 
-def read_wsi_and_dzg_tiles(wsi_path: str, tile_size: int, overlap: int) -> (OpenSlide, DeepZoomGenerator):
+def generate_deepzoom_tiles(wsi: OpenSlide, tile_size: int, overlap: int) -> DeepZoomGenerator:
     # Get lazy loading objects for Whole Slide Image and corresponding Tiles
-    wsi = OpenSlide(wsi_path)
-    tiles = DeepZoomGenerator(wsi, tile_size=tile_size-overlap, overlap=overlap//2)  # tricky parameters
-    return wsi, tiles
+    return DeepZoomGenerator(wsi, tile_size=tile_size-overlap, overlap=overlap//2)
 
 
 def save_wsi_region_as_tif(tilename_out: str, wsi_path: str, level: int,
