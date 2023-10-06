@@ -1,6 +1,4 @@
-import openslide_utils
-import zarr_utils
-import stardist_utils
+import my_utils as tools
 import zarr
 import os
 import numpy as np
@@ -11,11 +9,6 @@ with os.add_dll_directory(OPENSLIDE_PATH):
     import openslide
 from openslide import OpenSlide
 from openslide.deepzoom import DeepZoomGenerator
-
-
-def normalize(image: np.ndarray) -> np.ndarray:
-    # Poor man's normalization
-    return image / 255
 
 
 def erase_edge_objects(label: np.ndarray, results: dict, overlap: int, wsi_dims: tuple[int],
@@ -31,22 +24,23 @@ def erase_edge_objects(label: np.ndarray, results: dict, overlap: int, wsi_dims:
             # Record index of object with centroid in the buffer zone
             blackouts.append(i)
 
-    # Black out edge objects on the label.
-    blackouts = np.asarray(blackouts) + 1
-    label[np.isin(label, blackouts)] = 0
+    if blackouts:
+        # Black out edge objects on the label.
+        label_blackouts = np.asarray(blackouts) + 1
+        label[np.isin(label, label_blackouts)] = 0
 
-    # Remap the integer values to close the counting gaps created by blackouts
-    uniques = np.unique(label)
-    remap = {unique: i for i, unique in enumerate(uniques)}
-    label = np.vectorize(remap.get)(label)
+        # Remap the integer values to close the counting gaps created by blackouts
+        uniques = np.unique(label)
+        remap = {unique: i for i, unique in enumerate(uniques)}
+        label = np.vectorize(remap.get)(label)
 
-    # Delete the edge-case centroids and their vertex coordinates from the results
-    results['points'] = np.delete(results['points'], blackouts, axis=0)
-    results['coord'] = np.delete(results['coord'], blackouts, axis=0)
+        # Delete the edge-case centroids and their vertex coordinates from the results
+        results['points'] = np.delete(results['points'], blackouts, axis=0)
+        results['coord'] = np.delete(results['coord'], blackouts, axis=0)
     return label, results
 
 
-def globalize_results(label: np.ndarray, results: dict, count: int, upper: int, left: int) -> (np.ndarray, dict):
+def globalize(label: np.ndarray, results: dict, count: int, upper: int, left: int) -> (np.ndarray, dict):
     # Add accumulated nuclei count to nonzero values on the label
     label[label != 0] += count
 
@@ -112,7 +106,7 @@ def seg_subroutine(tiles: DeepZoomGenerator, level: int, model: StarDist2D, zarr
 
             # Read RGBA PIL object tile into memory, convert to RGB numpy array, and normalize
             tile = tiles.get_tile(level=tiles.level_count-level-1, address=(x, y))
-            tile = normalize(np.asarray(tile.convert('RGB')))
+            tile = tools.image_processing.normalize(np.asarray(tile.convert('RGB')))
 
             # Perform the prediction, override thresholds. Delete object probability outputs, no common usage.
             label, results = model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
@@ -122,7 +116,7 @@ def seg_subroutine(tiles: DeepZoomGenerator, level: int, model: StarDist2D, zarr
             label, results = erase_edge_objects(label, results, overlap, dims, left, upper, right, lower)
 
             # Put tile label and result coordinates into context of WSI object indexing and coordinates
-            label, results = globalize_results(label, results, count, upper, left)
+            label, results = globalize(label, results, count, upper, left)
             count += results['points'].shape[0]
 
             # Record label patch onto the full zarr label. Append centroids and vertex data.
@@ -134,14 +128,14 @@ def segment_whole_slide(wsi_path: str, model_path: str, output_folder: str, leve
         -> None:
     # Get slide and tiling metadata
     wsi = OpenSlide(wsi_path)
-    tiles = openslide_utils.generate_deepzoom_tiles(wsi, tile_size, overlap)
+    tiles = tools.opensliding.generate_deepzoom_tiles(wsi, tile_size, overlap)
     dims = wsi.level_dimensions[level][::-1]
 
     # Load StarDist model
-    model = stardist_utils.load_model(model_path)
+    model = tools.stardisting.load_model(model_path)
 
     # Initialize empty zarrs
-    zarrs = zarr_utils.initialize_zarrs_for_stardist_wsi_predictions(dims, tile_size, overlap, model)
+    zarrs = tools.zarring.initialize_zarrs_for_stardist_wsi_predictions(dims, tile_size, overlap, model)
 
     # Segment tiles and lay the results onto the zarrs
     zarrs = seg_subroutine(tiles, level, model, zarrs, dims, overlap)
@@ -152,11 +146,12 @@ def segment_whole_slide(wsi_path: str, model_path: str, output_folder: str, leve
     return None
 
 
-wsi_path_ = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\raw images\z-0028_2023-04-18 11.20.36.ndpi"
-model_path_ = r"\\10.99.68.31\PW Cloud Exp Documents\Lab work documenting\W-23-07-07 JL Evaluate performance of StarDist Nuclei Segmentation in different tissues\Models\0 Base Model\Model_00"
-output_folder_ = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Whole Slide Segmentations"
-level_ = 0
-tile_size_ = 4096 // 2
-overlap_ = 128
+if __name__ == "__main__":
+    wsi_path_ = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\raw images\z-0028_2023-04-18 11.20.36.ndpi"
+    model_path_ = r"\\10.99.68.31\PW Cloud Exp Documents\Lab work documenting\W-23-07-07 JL Evaluate performance of StarDist Nuclei Segmentation in different tissues\Models\0 Base Model\Model_00"
+    output_folder_ = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Whole Slide Segmentations"
+    level_ = 0
+    tile_size_ = 4096 // 2
+    overlap_ = 128
 
-segment_whole_slide(wsi_path_, model_path_, output_folder_, level_, tile_size_, overlap_)
+    segment_whole_slide(wsi_path_, model_path_, output_folder_, level_, tile_size_, overlap_)
