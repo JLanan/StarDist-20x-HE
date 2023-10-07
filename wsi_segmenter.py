@@ -106,7 +106,7 @@ def seg_subroutine(tiles: DeepZoomGenerator, level: int, model: StarDist2D, zarr
 
             # Read RGBA PIL object tile into memory, convert to RGB numpy array, and normalize
             tile = tiles.get_tile(level=tiles.level_count-level-1, address=(x, y))
-            tile = tools.image_processing.normalize(np.asarray(tile.convert('RGB')))
+            tile = tools.image_preprocessing.pseudo_normalize(np.asarray(tile.convert('RGB')))
 
             # Perform the prediction, override thresholds. Delete object probability outputs, no common usage.
             label, results = model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))

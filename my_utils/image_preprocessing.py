@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def normalize(image: np.ndarray) -> np.ndarray:
+def pseudo_normalize(image: np.ndarray) -> np.ndarray:
     # Poor man's normalization
     return image / 255
 
