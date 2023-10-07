@@ -1,13 +1,12 @@
-import zarring
-import opensliding
+from my_utils import zarring
+from my_utils import opensliding
 import os
 import numpy as np
 from skimage import measure
 from PIL import Image
 OPENSLIDE_PATH = r"C:\Users\labuser\Documents\GitHub\StarDist-20x-HE\openslide-win64-20230414\bin"
 with os.add_dll_directory(OPENSLIDE_PATH):
-    import opensliding
-from opensliding import OpenSlide
+    from opensliding import OpenSlide
 
 
 def make_overlay(image: np.ndarray, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
@@ -32,7 +31,7 @@ def make_overlay(image: np.ndarray, mask: np.ndarray, rgb: list[int]) -> np.ndar
 def detect_level(wsi: OpenSlide, zarr_path: str) -> int:
     # Determine wsi level from zarr dimensions
     level = 0
-    zarr_dims = zarr_utils.get_zarr_dims(zarr_path)
+    zarr_dims = zarring.get_zarr_dims(zarr_path)
     for lvl, dims in enumerate(wsi.level_dimensions):
         if zarr_dims[0] == dims[1]:
             level = lvl
@@ -46,9 +45,9 @@ def make_overlay_from_wsi_and_zarr(wsi_path: str, zarr_path: str, rgb: list[int]
     wsi = OpenSlide(wsi_path)
     level = detect_level(wsi, zarr_path)
     left, top, right, bottom = \
-        openslide_utils.get_region_boundary_left_top_right_bottom(wsi, x_mu_cp, y_mu_cp, width, height)
-    tissue = openslide_utils.read_wsi_region(wsi_path, level, x_mu_cp, y_mu_cp, width, height)
-    mask = zarr_utils.read_zarr_region(zarr_path, top, bottom, left, right)
+        opensliding.get_region_pixel_boundary_left_top_right_bottom(wsi, x_mu_cp, y_mu_cp, width, height)
+    tissue = opensliding.read_wsi_region(wsi_path, level, x_mu_cp, y_mu_cp, width, height)
+    mask = zarring.read_zarr_region(zarr_path, top, bottom, left, right)
     return make_overlay(tissue, mask, rgb)
 
 
@@ -61,7 +60,7 @@ def save_frames_as_gif(gif_out_path: str, frames: list[np.ndarray], duration: in
 def make_gif_from_wsi_and_zarr(wsi_path: str, zarr_path: str, gif_out_path: str, rgb: list[int], duration: int,
                                x_mu_cp: int, y_mu_cp: int, width: int, height: int) -> None:
     level = detect_level(OpenSlide(wsi_path), zarr_path)
-    tissue = openslide_utils.read_wsi_region(wsi_path, level, x_mu_cp, y_mu_cp, width, height)
+    tissue = opensliding.read_wsi_region(wsi_path, level, x_mu_cp, y_mu_cp, width, height)
     overlay = make_overlay_from_wsi_and_zarr(wsi_path, zarr_path, rgb, x_mu_cp, y_mu_cp, width, height)
     frames = [tissue, overlay]
     save_frames_as_gif(gif_out_path, frames, duration)

@@ -3,13 +3,12 @@ import tifffile as tiff
 import numpy as np
 OPENSLIDE_PATH = r"C:\Users\labuser\Documents\GitHub\StarDist-20x-HE\openslide-win64-20230414\bin"
 with os.add_dll_directory(OPENSLIDE_PATH):
-    import openslide
-from openslide import OpenSlide
-from openslide.deepzoom import DeepZoomGenerator
+    from openslide import OpenSlide
+    from openslide.deepzoom import DeepZoomGenerator
 
 
-def get_region_boundary_left_top_right_bottom(wsi: OpenSlide, x_mu_cp: float, y_mu_cp: float, width: int, height: int) \
-        -> (int, int, int, int):
+def get_region_pixel_boundary_left_top_right_bottom(wsi: OpenSlide, x_mu_cp: float, y_mu_cp: float,
+                                                    width: int, height: int) -> (int, int, int, int):
     mpp_x, mpp_y = float(wsi.properties['openslide.mpp-x']), float(wsi.properties['openslide.mpp-y'])
     x_cp, y_cp = int(x_mu_cp / mpp_x), int(y_mu_cp / mpp_y)
     left, top = x_cp - width // 2, y_cp - height // 2
@@ -20,7 +19,7 @@ def get_region_boundary_left_top_right_bottom(wsi: OpenSlide, x_mu_cp: float, y_
 def read_wsi_region(wsi_path: str, level: int, x_mu_cp: float, y_mu_cp: float, width: int, height: int) -> np.ndarray:
     # Coordinates use PIL convention where x is horizontal
     wsi = OpenSlide(wsi_path)
-    left, top, right, bottom = get_region_boundary_left_top_right_bottom(wsi, x_mu_cp, y_mu_cp, width, height)
+    left, top, right, bottom = get_region_pixel_boundary_left_top_right_bottom(wsi, x_mu_cp, y_mu_cp, width, height)
     return np.asarray(wsi.read_region((left, top), level, (width, height)).convert('RGB'))
 
 

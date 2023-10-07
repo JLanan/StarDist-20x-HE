@@ -48,28 +48,53 @@ def calc_tp_fp_sg(pred_centroids: list[list[int, int]], gt: np.ndarray, pred: np
     for centroid in pred_centroids:
         x, y = centroid[0], centroid[1]
         gt_val_at_pred_centroid = gt[x][y]
+        pred_val_at_pred_centroid = pred[x][y]
         if gt_val_at_pred_centroid:
             binary_mask_gt = (gt == gt_val_at_pred_centroid)
-            pred_val_at_pred_centroid = pred[x][y]
             binary_mask_pred = (pred == pred_val_at_pred_centroid)
-            object_object_iou = calc_iou(binary_mask_gt, binary_mask_pred)
-            if object_object_iou >= tau:
+            iou = calc_iou(binary_mask_gt, binary_mask_pred)
+            if iou >= tau:
                 tp += 1
-                sum_tp_iou += object_object_iou
+                sum_tp_iou += iou
             else:
                 fp += 1
-    sg = sum_tp_iou / tp
+        else:
+            fp += 1
+    sg = sum_tp_iou / tp if tp > 0 else 0
     return tp, fp, sg
 
 
-def calc_fn(gt_centroids: list[list[int, int]], gt: np.ndarray, pred: np.ndarray) -> int:
+def calc_fn(gt_centroids: list[list[int, int]], gt: np.ndarray, pred: np.ndarray, tau: float) -> int:
     fn = 0
     for centroid in gt_centroids:
         x, y = centroid[0], centroid[1]
         pred_val_at_gt_centroid = pred[x][y]
-        if not pred_val_at_gt_centroid:
-            fn += 0
+        gt_val_at_gt_centroid = gt[x][y]
+        if pred_val_at_gt_centroid:
+            binary_mask_gt = (gt == gt_val_at_gt_centroid)
+            binary_mask_pred = (pred == pred_val_at_gt_centroid)
+            iou = calc_iou(binary_mask_gt, binary_mask_pred)
+            if iou < tau:
+                fn += 1
+        else:
+            fn += 1
     return fn
+
+
+def calc_subroutine(gt: np.ndarray, pred: np.ndarray,
+                    gt_centroids: list[list[int, int]], pred_centroids: list[list[int, int]], tau) \
+        -> (int, int, int, float, float, float, float, float, float):
+    tp, fp, seg_qual = calc_tp_fp_sg(pred_centroids, gt, pred, tau)
+    fn = calc_fn(gt_centroids, gt, pred, tau)
+    if not tp:
+        precision, recall, avg_prec, f1 = 0, 0, 0, 0
+    else:
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        avg_prec = tp / (tp + fp + fn)
+        f1 = 2 * precision * recall / (precision + recall)
+    pan_qual = seg_qual * f1
+    return tp, fp, fn, precision, recall, avg_prec, f1, seg_qual, pan_qual
 
 
 def calculate_metrics(names: list[str], ground_truths: list[np.ndarray], predictions: list[np.ndarray],
@@ -79,19 +104,14 @@ def calculate_metrics(names: list[str], ground_truths: list[np.ndarray], predict
                'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
     df_results = pd.DataFrame(columns=columns)
 
-    for i, name in tqdm(enumerate(names), desc='Progress through tiles'):
+    for i, name in tqdm(enumerate(names), desc='Progress through tiles', leave=False):
         gt, pred = ground_truths[i], predictions[i]
         gt_centroids = get_centroids(gt)
         pred_centroids = get_centroids(pred)
+        iou = calc_iou(gt, pred)
         for tau in taus:
-            iou = calc_iou(gt, pred)
-            tp, fp, seg_qual = calc_tp_fp_sg(pred_centroids, gt, pred, tau)
-            fn = calc_fn(gt_centroids, gt,  pred)
-            precision = tp / (tp + fp)
-            recall = tp / (tp + fn)
-            avg_prec = tp / (tp + fp + fn)
-            f1 = 2 * precision * recall / (precision + recall)
-            pan_qual = seg_qual * f1
+            tp, fp, fn, precision, recall, avg_prec, f1, seg_qual, pan_qual = \
+                calc_subroutine(gt, pred, gt_centroids, pred_centroids, tau)
 
             # One line dataframe to append to results
             results = {'Model': [model_name],
@@ -114,15 +134,3 @@ def calculate_metrics(names: list[str], ground_truths: list[np.ndarray], predict
 def save_metrics_df_as_csv(df_results: pd.DataFrame, out_folder: str, series_id: str) -> None:
     df_results.to_csv(os.path.join(out_folder, f"data {series_id}.csv"), index=False)
     return None
-
-
-if __name__ == "__main__":
-    gt_folder_ = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining\Manual Annotations Split\test"
-    pred_folder_ = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining\StarDist Predictions\00\test"
-    taus_ = [0.5, 0.6, 0.7, 0.8, 0.9]
-    model_name_ = r"Model_00"
-    series_id_ = 'testing metrics calculator'
-
-    names_, ground_truths_, predictions_ = read_tile_sets(gt_folder_, pred_folder_)
-    df_results_ = calculate_metrics(names_, ground_truths_, predictions_, taus_, model_name_)
-    save_metrics_df_as_csv(df_results_, pred_folder_, series_id_)

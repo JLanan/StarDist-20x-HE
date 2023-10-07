@@ -1,4 +1,4 @@
-import my_utils as tools
+from my_utils import image_preprocessing
 import json
 import numpy as np
 import os
@@ -34,7 +34,7 @@ def read_tissue_tiles(folder_path: str, extension: str) -> (list[str], list[np.n
 def make_predictions(images: list[np.ndarray], model: StarDist2D) -> list[np.ndarray]:
     masks = []
     for image in images:
-        image = tools.image_processing.normalize(image)
+        image = image_preprocessing.pseudo_normalize(image)
         mask, details = model.predict_instances(image)
         masks.append(mask)
     return masks

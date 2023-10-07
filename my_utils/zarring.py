@@ -1,7 +1,7 @@
 import zarr
 import tifffile as tiff
 import numpy as np
-from stardist.models import StarDist2D, Config2D
+from stardist.models import StarDist2D
 
 
 def read_whole_zarr(zarr_path: str) -> np.ndarray:
