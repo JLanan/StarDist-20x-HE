@@ -2,6 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 from skimage.io import imread, imsave
+from skimage import measure
+from scipy import ndimage
 
 
 class TileSetReader:
@@ -200,16 +202,117 @@ class ScoringSubroutine:
         return fn
 
 
-class OverLayer:
+class TilePairAugmenter:
+    def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray,
+                 flip: bool = True, rotate: bool = True, scale: bool = True, hue: bool = True, blur: bool = True):
+        self.image_rgb = image_rgb
+        self.mask_gray = mask_gray
+        self.original_shape = np.copy(mask_gray).shape
+        self.flip = flip
+        self.rotate = rotate
+        self.scale = scale
+        self.hue = hue
+        self.blur = blur
+
+    def augment_pair(self, random_state: int = 42) -> (np.ndarray, np.ndarray):
+        np.random.seed(random_state)
+        if self.flip:
+            self.image_rgb, self.mask_gray = self.flip_pair()
+        if self.rotate:
+            self.image_rgb, self.mask_gray = self.rotate_pair()
+        if self.scale:
+            self.image_rgb, self.mask_gray = self.scale_pair()
+        if self.hue:
+            self.image_rgb, self.mask_gray = self.hue_image()
+        if self.blur:
+            self.image_rgb, self.mask_gray = self.blur_image()
+        return self.image_rgb, self.mask_gray
+
+    def flip_pair(self):
+        # Random mirror flip
+        flip_id = np.random.randint(0, 3)
+        if flip_id:  # 0 none, 1 horizontal, 2 vertical
+            self.image_rgb = np.flip(self.image_rgb, axis=flip_id-1)
+            self.mask_gray = np.flip(self.mask_gray, axis=flip_id-1)
+        return self.image_rgb, self.mask_gray
+
+    def rotate_pair(self):
+        # Random rotation with reflection padding
+        angles = np.arange(10, 360, 10)
+        angle = angles[np.random.randint(0, len(angles))]
+        self.image_rgb = ndimage.rotate(self.image_rgb, angle, reshape=False, mode='reflect')
+        self.mask_gray = ndimage.rotate(self.mask_gray, angle, reshape=False, mode='reflect')
+        return self.image_rgb, self.mask_gray
+
+    def scale_pair(self):
+        # Random rescale
+        lows, highs = np.arange(0.8, 0.91, 0.01), np.arange(1.1, 1.21, 0.01)
+        scales = np.append(lows, highs)
+        scale = scales[np.random.randint(0, len(scales))]
+        self.image_rgb = ndimage.zoom(self.image_rgb, (scale, scale, 1), order=0)  # 0 nearest neighbor
+        self.mask_gray = ndimage.zoom(self.mask_gray, (scale, scale), order=0)  # 0 nearest neighbor
+
+        # Size correction, crop if upscaled, mirror pad if downscaled
+        if scale > 1:
+            dx, dy = self.original_shape
+            x0, y0 = 0, 0
+            x3, y3 = self.mask_gray.shape
+            x1, y1 = np.random.randint(x0, x3 - dx), np.random.randint(y0, y3 - dy)
+            x2, y2, = x1 + dx, y1 + dy
+            self.image_rgb = self.image_rgb[x1: x2, y1: y2, :]
+            self.mask_gray = self.mask_gray[x1: x2, y1: y2]
+        else:
+            target_size = self.original_shape
+            pad_x = (target_size[0] - self.mask_gray.shape[0]) // 2
+            pad_y = (target_size[1] - self.mask_gray.shape[1]) // 2
+            self.image_rgb = np.pad(self.image_rgb, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)), mode='reflect')
+            self.mask_gray = np.pad(self.mask_gray, ((pad_x, pad_x), (pad_y, pad_y)), mode='reflect')
+        return self.image_rgb, self.mask_gray
+
+    def hue_image(self):
+        # Random hue jitter, image only
+        lows, highs = np.arange(0.88, 0.99, 0.01), np.arange(1.02, 1.13, 0.01)
+        scales = np.append(lows, highs)
+        r_scl = scales[np.random.randint(0, len(scales))]
+        g_scl = scales[np.random.randint(0, len(scales))]
+        b_scl = scales[np.random.randint(0, len(scales))]
+        self.image_rgb[:, :, 0] = self.image_rgb[:, :, 0] * r_scl
+        self.image_rgb[:, :, 1] = self.image_rgb[:, :, 1] * g_scl
+        self.image_rgb[:, :, 2] = self.image_rgb[:, :, 2] * b_scl
+        self.image_rgb = np.round(self.image_rgb).clip(0, 255).astype(np.uint8)
+        return self.image_rgb
+
+    def blur_image(self):
+        # Random Gaussian blur, image only
+        sigmas = np.arange(0, 1.6, 0.1)
+        sigma = sigmas[np.random.randint(0, len(sigmas))]
+        self.image_rgb = ndimage.gaussian_filter(self.image_rgb, sigma=(sigma, sigma, 0))
+        return self.image_rgb
 
 
-def calculate_metrics(names: list[str], ground_truths: list[np.ndarray], predictions: list[np.ndarray],
-                      taus: list[float], set_id: str) -> pd.DataFrame:
+class WSISectionOverLayer:
+    def __init__(self):
 
 
+# This one is just a general function
+def make_overlay(image: np.ndarray, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
+    image, mask = np.copy(image), np.copy(mask)  # Writable versions
+    contour_set = []
+    object_ids = np.unique(mask[mask != 0])
 
+    # Loop through each object id and record contour coordinates
+    for index in object_ids:
+        bin_thresh_mask = np.zeros_like(mask)  # Black backdrop
+        indices = np.where(mask == index)
+        bin_thresh_mask[indices] = 255  # Filling in single object in with white
+        contour_set.append(measure.find_contours(bin_thresh_mask))
 
+    # Loop through all contour coordinates and color them in on the main image
+    for contours in contour_set:
+        for contour in contours:
+            image[np.round(contour[:, 0]).astype(int), np.round(contour[:, 1]).astype(int)] = rgb
+    return image
 
-def save_metrics_df_as_csv(df_results: pd.DataFrame, out_folder: str, series_id: str) -> None:
-    df_results.to_csv(os.path.join(out_folder, f"data {series_id}.csv"), index=False)
-    return None
+def pseudo_normalize(self) -> np.ndarray:
+    # Poor man's normalization
+    return self.image / 255

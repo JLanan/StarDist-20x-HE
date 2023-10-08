@@ -2,30 +2,14 @@ from my_utils import zarring
 from my_utils import opensliding
 import os
 import numpy as np
-from skimage import measure
+
 from PIL import Image
 OPENSLIDE_PATH = r"C:\Users\labuser\Documents\GitHub\StarDist-20x-HE\openslide-win64-20230414\bin"
 with os.add_dll_directory(OPENSLIDE_PATH):
     from opensliding import OpenSlide
 
 
-def make_overlay(image: np.ndarray, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
-    image, mask = np.copy(image), np.copy(mask)  # Writable versions
-    contour_set = []
-    object_ids = np.unique(mask[mask != 0])
 
-    # Loop through each object id and record contour coordinates
-    for index in object_ids:
-        bin_thresh_mask = np.zeros_like(mask)  # Black backdrop
-        indices = np.where(mask == index)
-        bin_thresh_mask[indices] = 255  # Filling in single object in with white
-        contour_set.append(measure.find_contours(bin_thresh_mask))
-
-    # Loop through all contour coordinates and color them in on the main image
-    for contours in contour_set:
-        for contour in contours:
-            image[np.round(contour[:, 0]).astype(int), np.round(contour[:, 1]).astype(int)] = rgb
-    return image
 
 
 def detect_level(wsi: OpenSlide, zarr_path: str) -> int:

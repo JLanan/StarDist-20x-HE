@@ -1,5 +1,7 @@
 from my_utils import evaluating
 
+df_results.to_csv(os.path.join(out_folder, f"data {series_id}.csv"), index=False)
+
 gt_folder = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining\Manual Annotations Split\test"
 pred_folder = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining\StarDist Predictions\00\test"
 taus = [0.5, 0.6, 0.7, 0.8, 0.9]
