@@ -20,17 +20,6 @@ def load_model(mdl_path: str) -> StarDist2D:
     return model
 
 
-def read_tissue_tiles(folder_path: str, extension: str) -> (list[str], list[np.ndarray]):
-    base_names, images = [], []
-    for img_name in os.listdir(folder_path):
-        if img_name.endswith(extension):
-            image = imread(os.path.join(folder_path, img_name))
-            images.append(image)
-            base_name, extension = img_name.rsplit('.', 1)
-            base_names.append(base_name)
-    return base_names, images
-
-
 def make_predictions(images: list[np.ndarray], model: StarDist2D) -> list[np.ndarray]:
     masks = []
     for image in images:

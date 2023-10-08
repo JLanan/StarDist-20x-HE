@@ -1,8 +1,88 @@
 import os
 import numpy as np
+from scipy import ndimage
 import pandas as pd
 from tqdm import tqdm
 from skimage.io import imread
+import tifffile as tiff
+
+
+def pseudo_normalize(image: np.ndarray) -> np.ndarray:
+    # Poor man's normalization
+    return image / 255
+
+
+def augment_pair(image: np.ndarray, mask: np.ndarray, random_state: int) -> (np.ndarray, np.ndarray):
+    # Performs series of random transforms on image, similar to Ashley's H&E augmenter in MATLAB
+    original_image, original_mask = np.copy(image), np.copy(mask)
+    np.random.seed(random_state)
+
+    # Random mirror flip
+    flip_id = np.random.randint(0, 3)
+    if flip_id:  # 0 none, 1 horizontal, 2 vertical
+        image = np.flip(image, axis=flip_id-1)
+        mask = np.flip(mask, axis=flip_id-1)
+
+    # Random rotation with reflection padding
+    angles = np.arange(10, 360, 10)
+    angle = angles[np.random.randint(0, len(angles))]
+    image = ndimage.rotate(image, angle, reshape=False, mode='reflect')
+    mask = ndimage.rotate(mask, angle, reshape=False, mode='reflect')
+
+    # Random rescale
+    lows, highs = np.arange(0.8, 0.91, 0.01), np.arange(1.1, 1.21, 0.01)
+    scales = np.append(lows, highs)
+    scale = scales[np.random.randint(0, len(scales))]
+    image = ndimage.zoom(image, (scale, scale, 1), order=0)  # 0 nearest neighbor
+    mask = ndimage.zoom(mask, (scale, scale), order=0)  # 0 nearest neighbor
+
+    # Size correction, crop if upscaled, mirror pad if downscaled
+    if scale > 1:
+        dx, dy = original_mask.shape
+        x0, y0 = 0, 0
+        x3, y3 = mask.shape
+        x1, y1 = np.random.randint(x0, x3-dx), np.random.randint(y0, y3-dy)
+        x2, y2, = x1 + dx, y1 + dy
+        image = image[x1: x2, y1: y2, :]
+        mask = mask[x1: x2, y1: y2]
+    else:
+        target_size = original_mask.shape
+        pad_x = (target_size[0] - mask.shape[0]) // 2
+        pad_y = (target_size[1] - mask.shape[1]) // 2
+        image = np.pad(image, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)), mode='reflect')
+        mask = np.pad(mask, ((pad_x, pad_x), (pad_y, pad_y)), mode='reflect')
+
+    # Random hue jitter, image only
+    lows, highs = np.arange(0.88, 0.99, 0.01), np.arange(1.02, 1.13, 0.01)
+    scales = np.append(lows, highs)
+    r_scl = scales[np.random.randint(0, len(scales))]
+    g_scl = scales[np.random.randint(0, len(scales))]
+    b_scl = scales[np.random.randint(0, len(scales))]
+    image[:, :, 0] = image[:, :, 0] * r_scl
+    image[:, :, 1] = image[:, :, 1] * g_scl
+    image[:, :, 2] = image[:, :, 2] * b_scl
+    image = np.round(image).clip(0, 255).astype(np.uint8)
+
+    # Random Gaussian blur, image only
+    sigmas = np.arange(0, 1.6, 0.1)
+    sigma = sigmas[np.random.randint(0, len(sigmas))]
+    image = ndimage.gaussian_filter(image, sigma=(sigma, sigma, 0))
+    return mask, image
+
+
+def read_tiles_and_names(folder_path: str, extension: str) -> (list[str], list[np.ndarray]):
+    base_names, images = [], []
+    for img_name in os.listdir(folder_path):
+        if img_name.endswith(extension):
+            image = imread(os.path.join(folder_path, img_name))
+            images.append(image)
+            base_name, extension = img_name.rsplit('.', 1)
+            base_names.append(base_name)
+    return base_names, images
+
+
+def write_tiles_and_names(folder_path: str, extension: str) -> None:
+
 
 
 def read_tile_sets(gt_folder: str, prediction_folder: str) -> (list[str], list[np.ndarray], list[np.ndarray]):
@@ -20,16 +100,6 @@ def read_tile_sets(gt_folder: str, prediction_folder: str) -> (list[str], list[n
                 predictions.append(pred)
     return base_names, ground_truths, predictions
 
-
-def get_centroids(mask) -> list[list[int, int]]:
-    # Finds centroid coordinates as weighted averages of binary pixel values
-    centroids = []
-    for object_id in np.unique(mask)[1:]:
-        binary_mask = (mask == object_id)
-        x_coords, y_coords = np.where(binary_mask)
-        x, y = int(np.round(np.mean(x_coords))), int(np.round(np.mean(y_coords)))
-        centroids.append([x, y])
-    return centroids
 
 
 def calc_iou(array1: np.ndarray, array2: np.ndarray) -> float:
@@ -81,21 +151,6 @@ def calc_fn(gt_centroids: list[list[int, int]], gt: np.ndarray, pred: np.ndarray
     return fn
 
 
-def calc_subroutine(gt: np.ndarray, pred: np.ndarray,
-                    gt_centroids: list[list[int, int]], pred_centroids: list[list[int, int]], tau) \
-        -> (int, int, int, float, float, float, float, float, float):
-    tp, fp, seg_qual = calc_tp_fp_sg(pred_centroids, gt, pred, tau)
-    fn = calc_fn(gt_centroids, gt, pred, tau)
-    if not tp:
-        precision, recall, avg_prec, f1 = 0, 0, 0, 0
-    else:
-        precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
-        avg_prec = tp / (tp + fp + fn)
-        f1 = 2 * precision * recall / (precision + recall)
-    pan_qual = seg_qual * f1
-    return tp, fp, fn, precision, recall, avg_prec, f1, seg_qual, pan_qual
-
 
 def calculate_metrics(names: list[str], ground_truths: list[np.ndarray], predictions: list[np.ndarray],
                       taus: list[float], model_name: str) -> pd.DataFrame:
@@ -134,3 +189,13 @@ def calculate_metrics(names: list[str], ground_truths: list[np.ndarray], predict
 def save_metrics_df_as_csv(df_results: pd.DataFrame, out_folder: str, series_id: str) -> None:
     df_results.to_csv(os.path.join(out_folder, f"data {series_id}.csv"), index=False)
     return None
+
+
+
+if __name__ == "__main__":
+    root = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining"
+    for tilename in os.listdir(root):
+        if tilename.endswith('.TIFF'):
+            basename = tilename[:-5]
+            augname = basename + "_aug.TIFF"
+
