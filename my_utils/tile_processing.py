@@ -9,21 +9,19 @@ from PIL import Image
 
 class TileSetReader:
     def __init__(self, folder_s: str | list[str], extension_s: str | list[str]):
+        self.folder_s = folder_s
+        self.extension_s = extension_s
         if type(folder_s) == str:
-            self.folder = folder_s
+            self.tile_set = self.read_single_tile_set()
         else:
-            self.folders = folder_s
-        if type(extension_s) == str:
-            self.extension = extension_s
-        else:
-            self.extensions = extension_s
+            self.tile_set = self.read_multiple_tile_sets()
 
     def read_single_tile_set(self) -> (list[str], list[np.ndarray]):
         base_names, tiles = [], []
-        for full_name in os.listdir(self.folder):
-            if full_name.endswith(self.extension):
+        for full_name in os.listdir(self.folder_s):
+            if full_name.endswith(self.extension_s):
                 base_name, _ = full_name.rsplit('.', 1)
-                tile = imread(os.path.join(self.folder, full_name))
+                tile = imread(os.path.join(self.folder_s, full_name))
                 base_names.append(base_name)
                 tiles.append(tile)
         return base_names, tiles
@@ -34,14 +32,14 @@ class TileSetReader:
         Secondary sets may have extra tiles, but none missing from the first.
         Can handle different extensions between sets, assuming they are common image types.
         """
-        base_names, tile_sets = [], [[] for _ in range(len(self.folders))]
-        first_folder = self.folders[0]
+        base_names, tile_sets = [], [[] for _ in range(len(self.folder_s))]
+        first_folder = self.folder_s[0]
         for full_name in os.listdir(first_folder):
             base_name = full_name.rsplit('.', 1)[0]
             base_names.append(base_name)
-        for i, folder in enumerate(self.folders):
+        for i, folder in enumerate(self.folder_s):
             for full_name in os.listdir(folder):
-                if full_name.endswith(self.extensions[i]):
+                if full_name.endswith(self.extension_s[i]):
                     base_name, _ = full_name.rsplit('.', 1)
                     if base_name in base_names:
                         tile = imread(os.path.join(folder, full_name))
@@ -52,26 +50,24 @@ class TileSetReader:
 class TileSetWriter:
     def __init__(self, folder_s: str | list[str], base_names: list[str],
                  tile_set_s: list[np.ndarray] | list[list[np.ndarray]], desired_extension: str = '.tif'):
+        self.folder_s = folder_s
         self.base_names = base_names
+        self.tile_set_s = tile_set_s
         self.desired_extension = desired_extension
         if type(folder_s) == str:
-            self.folder = folder_s
+            self.write_single_tile_set()
         else:
-            self.folders = folder_s
-        if type(tile_set_s[0]) == np.ndarray:
-            self.tile_set = tile_set_s
-        else:
-            self.tile_sets = tile_set_s
+            self.write_multiple_tile_sets()
 
     def write_single_tile_set(self) -> None:
-        for i, tile in enumerate(self.tile_set):
-            imsave(os.path.join(self.folder, self.base_names[i] + self.desired_extension), tile)
+        for i, tile in enumerate(self.tile_set_s):
+            imsave(os.path.join(self.folder_s, self.base_names[i] + self.desired_extension), tile)
         return None
 
     def write_multiple_tile_sets(self) -> None:
-        for j, tile_set in self.tile_sets:
+        for j, tile_set in self.tile_set_s:
             for i, tile in enumerate(tile_set):
-                imsave(os.path.join(self.folders[j], self.base_names[i] + self.desired_extension), tile)
+                imsave(os.path.join(self.folder_s[j], self.base_names[i] + self.desired_extension), tile)
         return None
 
 
@@ -82,43 +78,41 @@ class TileSetScorer:
     def __init__(self, base_names: list[str], set_id_s: str | list[str], gt_set: list[np.ndarray],
                  predicted_set_s: list[np.ndarray] | list[list[np.ndarray]], taus: list[float]):
         self.base_names = base_names
+        self.set_id_s = set_id_s
         self.gt_set = gt_set
+        self.predicted_set_s = predicted_set_s
         self.taus = taus
-        if type(set_id_s) == str:
-            self.set_id = set_id_s
-        else:
-            self.set_ids = set_id_s
-        if type(predicted_set_s[0]) == np.ndarray:
-            self.pred_set = predicted_set_s
-        else:
-            self.pred_sets = predicted_set_s
         # Initialize an empty dataframe to store results
         self.columns = ['Set ID', 'Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
-                   'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
+                        'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
         self.df_results = pd.DataFrame(columns=self.columns)
+        if type(set_id_s) == str:
+            self.df_results = self.score_single_set()
+        else:
+            self.df_results = self.score_multiple_sets()
 
     def score_single_set(self) -> pd.DataFrame:
         for i, base_name in enumerate(self.base_names):
-            gt, pred = self.gt_set[i], self.pred_set[i]
+            gt, pred = self.gt_set[i], self.predicted_set_s[i]
             for tau in self.taus:
                 scorer = ScoringSubroutine(gt, pred, tau)
                 scores = scorer.calculate_scores()
                 # One line dataframe to append to results
-                results = {'Set ID': [self.set_id], 'Image': [base_name], 'Tau': [tau]}
+                results = {'Set ID': [self.set_id_s], 'Image': [base_name], 'Tau': [tau]}
                 for j in range(len(self.columns)):
                     results = {self.columns[j]: [scores[j]]}
                 self.df_results = pd.concat([self.df_results, pd.DataFrame(results)], axis=0, ignore_index=True)
         return self.df_results
 
     def score_multiple_sets(self) -> list[pd.DataFrame]:
-        for k, pred_set in enumerate(self.pred_sets):
+        for k, pred_set in enumerate(self.predicted_set_s):
             for i, base_name in enumerate(self.base_names):
                 gt, pred = self.gt_set[i], pred_set[i]
                 for tau in self.taus:
                     scorer = ScoringSubroutine(gt, pred, tau)
                     scores = scorer.calculate_scores()
                     # One line dataframe to append to results
-                    results = {'Set ID': [self.set_id[k]], 'Image': [base_name], 'Tau': [tau]}
+                    results = {'Set ID': [self.set_id_s[k]], 'Image': [base_name], 'Tau': [tau]}
                     for j in range(len(self.columns)):
                         results = {self.columns[j]: [scores[j]]}
                     self.df_results = pd.concat([self.df_results, pd.DataFrame(results)], axis=0, ignore_index=True)
@@ -126,6 +120,9 @@ class TileSetScorer:
 
 
 class ScoringSubroutine:
+    """
+    Assumes the vast majority of objects to have internal centroids (i.e. convex)
+    """
     def __init__(self, gt: np.ndarray, pred: np.ndarray, tau: float):
         self.gt = gt
         self.pred = pred
@@ -204,19 +201,20 @@ class ScoringSubroutine:
 
 
 class TilePairAugmenter:
-    def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray,
+    def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray, random_state: int,
                  flip: bool = True, rotate: bool = True, scale: bool = True, hue: bool = True, blur: bool = True):
-        self.image_rgb = image_rgb
-        self.mask_gray = mask_gray
-        self.original_shape = np.copy(mask_gray).shape
+        self.image_rgb = np.copy(image_rgb)
+        self.mask_gray = np.copy(mask_gray)
+        self.original_shape = mask_gray.shape
+        np.random.seed(random_state)
         self.flip = flip
         self.rotate = rotate
         self.scale = scale
         self.hue = hue
         self.blur = blur
+        self.augmented_rgb_image, self.augmented_gray_mask = self.augment_pair()
 
-    def augment_pair(self, random_state: int = 42) -> (np.ndarray, np.ndarray):
-        np.random.seed(random_state)
+    def augment_pair(self) -> (np.ndarray, np.ndarray):
         if self.flip:
             self.image_rgb, self.mask_gray = self.flip_pair()
         if self.rotate:
@@ -291,52 +289,39 @@ class TilePairAugmenter:
         return self.image_rgb
 
 
-class WSISectionOverLayer:
-    def __init__(self):
-    def write_gif_from_wsi_and_zarr(self, wsi_path: str, zarr_path: str, gif_out_path: str, rgb: list[int], duration: int,
-                                    x_mu_cp: int, y_mu_cp: int, width: int, height: int) -> None:
-        level = detect_level(OpenSlide(wsi_path), zarr_path)
-        tissue = opensliding.read_wsi_region(wsi_path, level, x_mu_cp, y_mu_cp, width, height)
-        overlay = make_overlay_from_wsi_and_zarr(wsi_path, zarr_path, rgb, x_mu_cp, y_mu_cp, width, height)
-        frames = [tissue, overlay]
-        save_frames_as_gif(gif_out_path, frames, duration)
+class TileOverLayer:
+    def __init__(self, tissue_frame: np.ndarray,
+                 mask_frame_s: np.ndarray | list[np.ndarray], rgb_s: list[int] | list[list[int]]):
+        self.tissue = tissue_frame
+        self.mask_frame_s = mask_frame_s
+        self.rgb_s = rgb_s
+        self.frames = [tissue_frame]
+        if type(mask_frame_s) == np.ndarray:
+            self.frames.append(self.make_overlay(mask_frame_s, rgb_s))
+        else:
+            for i, mask_frame in enumerate(mask_frame_s):
+                self.frames.append(self.make_overlay(mask_frame, rgb_s[i]))
+
+    def make_overlay(self, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
+        image, mask = np.copy(self.tissue), np.copy(mask)
+        contour_set = []
+        object_ids = np.unique(mask[mask != 0])
+        # Loop through each object id and record contour coordinates
+        for index in object_ids:
+            bin_thresh_mask = np.zeros_like(mask)  # Black backdrop
+            indices = np.where(mask == index)
+            bin_thresh_mask[indices] = 255  # Filling in single object in with white
+            contour_set.append(measure.find_contours(bin_thresh_mask))
+        # Loop through all contour coordinates and color them in on the main image
+        for contours in contour_set:
+            for contour in contours:
+                image[np.round(contour[:, 0]).astype(int), np.round(contour[:, 1]).astype(int)] = rgb
+        return image
+
+    def save_frames_as_gif(self, gif_out_path: str, frames: list[np.ndarray], duration: int) -> None:
+        frames = [Image.fromarray(frame) for frame in frames]
+        frames[0].save(gif_out_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration, loop=0)
         return None
-    def make_overlay_from_wsi_and_zarr(wsi_path: str, zarr_path: str, rgb: list[int],
-                                       x_mu_cp: int, y_mu_cp: int, width: int, height: int) -> np.ndarray:
-        # Read regions and make overlay as numpy array
-        wsi = OpenSlide(wsi_path)
-        level = detect_level(wsi, zarr_path)
-        left, top, right, bottom = \
-            opensliding.get_region_pixel_boundary_left_top_right_bottom(wsi, x_mu_cp, y_mu_cp, width, height)
-        tissue = opensliding.read_wsi_region(wsi_path, level, x_mu_cp, y_mu_cp, width, height)
-        mask = zarring.read_zarr_region(zarr_path, top, bottom, left, right)
-        return make_overlay(tissue, mask, rgb)
-
-
-
-
-# These are just general functions
-def save_frames_as_gif(gif_out_path: str, frames: list[np.ndarray], duration: int) -> None:
-    frames = [Image.fromarray(frame) for frame in frames]
-    frames[0].save(gif_out_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration, loop=0)
-    return None
-
-
-def make_overlay(image: np.ndarray, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
-    image, mask = np.copy(image), np.copy(mask)  # Writable versions
-    contour_set = []
-    object_ids = np.unique(mask[mask != 0])
-    # Loop through each object id and record contour coordinates
-    for index in object_ids:
-        bin_thresh_mask = np.zeros_like(mask)  # Black backdrop
-        indices = np.where(mask == index)
-        bin_thresh_mask[indices] = 255  # Filling in single object in with white
-        contour_set.append(measure.find_contours(bin_thresh_mask))
-    # Loop through all contour coordinates and color them in on the main image
-    for contours in contour_set:
-        for contour in contours:
-            image[np.round(contour[:, 0]).astype(int), np.round(contour[:, 1]).astype(int)] = rgb
-    return image
 
 
 def pseudo_normalize(self) -> np.ndarray:

@@ -1,7 +1,4 @@
-from my_utils import opensliding
-from my_utils import image_preprocessing
 from my_utils import stardisting
-from my_utils import zarring
 import os
 import zarr
 import numpy as np
@@ -11,6 +8,78 @@ OPENSLIDE_PATH = r"C:\Users\labuser\Documents\GitHub\StarDist-20x-HE\openslide-w
 with os.add_dll_directory(OPENSLIDE_PATH):
     from openslide import OpenSlide
     from openslide.deepzoom import DeepZoomGenerator
+
+
+class WSISegmentor:
+    def __init__(self, wsi_path: str, model_path: str, output_folder: str,
+                 level: int = 0, tile_size: int = 2048, overlap: int = 128, n_rays: int = 32):
+        self.wsi = OpenSlide(wsi_path)
+        self.dims = self.wsi.level_dimensions[level][::-1]
+        self.output_folder = output_folder
+        self.model = stardisting.load_model(model_path)
+        self.model.config.n_rays = n_rays
+        self.level = level
+        self.tile_size = tile_size
+        self.overlap = overlap
+        self.n_rays = n_rays
+        self.tiles = self.generate_deepzoom_tiles()
+        self.zarrs = self.init_zarrs_for_wsi_prediction()
+        self.zarrs = self.seg_subroutine()
+
+    def generate_deepzoom_tiles(self) -> DeepZoomGenerator:
+        # Get lazy loading objects for Whole Slide Image and corresponding Tiles
+        return DeepZoomGenerator(self.wsi, tile_size=self.tile_size - self.overlap, overlap=self.overlap // 2)
+
+    def init_zarrs_for_wsi_prediction(self) -> tuple[zarr.core.Array, zarr.core.Array, zarr.core.Array]:
+        # Initialize zarrs such that the first tile could be entirely covered in nuclei (overlap is ~5 nuclei across)
+        safe_estimate = (self.tile_size / self.overlap * 5) ** 2
+        # Initialize the arrays as zeros. Using default Blosc compression algorithm.
+        z_label = zarr.zeros(shape=self.dims, chunks=(self.tile_size, self.tile_size), dtype=np.int32)
+        z_centroids = zarr.zeros(shape=(safe_estimate, 2), chunks=(self.tile_size, 2), dtype=np.int32)
+        z_vertices = zarr.zeros(shape=(safe_estimate, 2, self.n_rays),
+                                chunks=(self.tile_size, 2, self.n_rays), dtype=np.int32)
+        return z_label, z_centroids, z_vertices
+
+    def seg_subroutine(self) -> tuple[zarr.core.Array, zarr.core.Array, zarr.core.Array]:
+        # Get columns and rows for systematic tile predictions
+        cols, rows = self.tiles.level_tiles[-1 - self.level]
+
+        # Initialize object count and loop through the tile grid
+        count = 0
+        for x in tqdm(range(cols), desc='Row progression', position=1, leave=False):
+            for y in tqdm(range(rows), desc='Column progression', position=2, leave=False):
+                is_first = False if count > 0 else True
+
+                # Get pixel coordinate boundaries of the square tile at specified level
+                tile_coords = tiles.get_tile_coordinates(level=tiles.level_count - level - 1, address=(x, y))
+                left, upper = tile_coords[0][0], tile_coords[0][1]
+                right, lower = left + tile_coords[2][0], upper + tile_coords[2][1]
+
+                # Read RGBA PIL object tile into memory, convert to RGB numpy array, and normalize
+                tile = tiles.get_tile(level=tiles.level_count - level - 1, address=(x, y))
+                tile = image_preprocessing.pseudo_normalize(np.asarray(tile.convert('RGB')))
+
+                # Perform the prediction, override thresholds. Delete object probability outputs, no common usage.
+                label, results = model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
+                del results['prob']
+
+                # Erase edge objects and shift the indexing accordingly.
+                label, results = erase_edge_objects(label, results, overlap, dims, left, upper, right, lower)
+
+                # Put tile label and result coordinates into context of WSI object indexing and coordinates
+                label, results = globalize(label, results, count, upper, left)
+                count += results['points'].shape[0]
+
+                # Record label patch onto the full zarr label. Append centroids and vertex data.
+                zarrs = update_zarrs(label, results, zarrs, is_first, model, upper, lower, left, right)
+        return zarrs
+
+
+
+
+
+
+
 
 
 def erase_edge_objects(label: np.ndarray, results: dict, overlap: int, wsi_dims: tuple[int],
