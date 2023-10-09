@@ -57,10 +57,3 @@ def read_zarr_region(z_label: str | zarr.core.Array, left: int, top: int, right:
         return zarr.open(z_label, mode='r')[top:bottom, left:right]
     else:
         return z_label[top:bottom, left:right]
-
-
-def find_wsi_20x_level(wsi: str | OpenSlide) -> int:
-    if type(wsi) == str:
-        wsi = OpenSlide(wsi)
-    ### search wsi property map and infer 20x level. Throw error message if none exists.
-    return level_20x
