@@ -10,15 +10,19 @@ with os.add_dll_directory(OPENSLIDE_PATH):
     from openslide.deepzoom import DeepZoomGenerator
 
 
-class WSISegmentor:
-    def __init__(self, wsi_path: str, model_path: str, output_folder: str, auto_20x: bool = False,
+class WSISegmenter:
+    def __init__(self, wsi_path: str, model_path: str, output_folder: str, detect_20x: bool = False,
                  level: int = 0, tile_size: int = 2048, overlap: int = 128, n_rays: int = 32):
+        self.wsi_path = wsi_path
         self.wsi = OpenSlide(wsi_path)
         self.dims = self.wsi.level_dimensions[level][::-1]
         self.output_folder = output_folder
         self.model = stardisting.load_model(model_path)
         self.model.config.n_rays = n_rays
-        self.level = level
+        if detect_20x:
+            self.level = self.find_wsi_20x_level()
+        else:
+            self.level = level
         self.tile_size = tile_size
         self.overlap = overlap
         self.n_rays = n_rays
@@ -28,11 +32,20 @@ class WSISegmentor:
         for i, name in enumerate(['label.zarr', 'centroids.zarr', 'vertices.zarr']):
             zarr.save(os.path.join(output_folder, name), self.zarrs[i])
 
-    def find_wsi_20x_level(wsi: str | OpenSlide) -> int:
-        if type(wsi) == str:
-            wsi = OpenSlide(wsi)
-        ### search wsi property map and infer 20x level. Throw error message if none exists.
-        return level_20x
+    def find_wsi_20x_level(self) -> int:
+        native_mag = int(self.wsi.properties['openslide.objective-power'])
+        if native_mag == 20:
+            return 0
+        else:
+            for lvl, downsample in enumerate(self.wsi.level_downsamples):
+                down_mag = native_mag / downsample
+                if down_mag == 20:
+                    return lvl
+            else:
+                print('Current slide:', self.wsi_path.rsplit('\\', 1)[1])
+                lvl = int(input("Native magnification is not 20x, nor is there a 20x downsample for this slide.\n"
+                                "Please manually specify level, 0 being native: -->"))
+                return lvl
 
     def generate_deepzoom_tiles(self) -> DeepZoomGenerator:
         # Get lazy loading objects for Whole Slide Image and corresponding Tiles

@@ -7,6 +7,7 @@ from scipy import ndimage
 from PIL import Image
 
 
+
 class TileSetReader:
     def __init__(self, folder_s: str | list[str], extension_s: str | list[str]):
         self.folder_s = folder_s
@@ -35,8 +36,9 @@ class TileSetReader:
         base_names, tile_sets = [], [[] for _ in range(len(self.folder_s))]
         first_folder = self.folder_s[0]
         for full_name in os.listdir(first_folder):
-            base_name = full_name.rsplit('.', 1)[0]
-            base_names.append(base_name)
+            if full_name.endswith(self.extension_s[0]):
+                base_name = full_name.rsplit('.', 1)[0]
+                base_names.append(base_name)
         for i, folder in enumerate(self.folder_s):
             for full_name in os.listdir(folder):
                 if full_name.endswith(self.extension_s[i]):
@@ -65,7 +67,7 @@ class TileSetWriter:
         return None
 
     def write_multiple_tile_sets(self) -> None:
-        for j, tile_set in self.tile_set_s:
+        for j, tile_set in enumerate(self.tile_set_s):
             for i, tile in enumerate(tile_set):
                 imsave(os.path.join(self.folder_s[j], self.base_names[i] + self.desired_extension), tile)
         return None
@@ -210,48 +212,36 @@ class TilePairAugmenter:
         self.flip = flip
         self.rotate = rotate
         self.scale = scale
-        self.hue = hue
         self.blur = blur
         self.augmented_rgb_image, self.augmented_gray_mask = self.augment_pair()
 
     def augment_pair(self) -> (np.ndarray, np.ndarray):
-        if self.flip:
-            self.image_rgb, self.mask_gray = self.flip_pair()
-        if self.rotate:
-            self.image_rgb, self.mask_gray = self.rotate_pair()
+        if self.blur:
+            self.image_rgb = self.blur_image()
         if self.scale:
             self.image_rgb, self.mask_gray = self.scale_pair()
-        if self.hue:
-            self.image_rgb, self.mask_gray = self.hue_image()
-        if self.blur:
-            self.image_rgb, self.mask_gray = self.blur_image()
+        if self.rotate:
+            self.image_rgb, self.mask_gray = self.rotate_pair()
+        if self.flip:
+            self.image_rgb, self.mask_gray = self.flip_pair()
         return self.image_rgb, self.mask_gray
 
-    def flip_pair(self):
-        # Random mirror flip
-        flip_id = np.random.randint(0, 3)
-        if flip_id:  # 0 none, 1 horizontal, 2 vertical
-            self.image_rgb = np.flip(self.image_rgb, axis=flip_id-1)
-            self.mask_gray = np.flip(self.mask_gray, axis=flip_id-1)
-        return self.image_rgb, self.mask_gray
-
-    def rotate_pair(self):
-        # Random rotation with reflection padding
-        angles = np.arange(10, 360, 10)
-        angle = angles[np.random.randint(0, len(angles))]
-        self.image_rgb = ndimage.rotate(self.image_rgb, angle, reshape=False, mode='reflect')
-        self.mask_gray = ndimage.rotate(self.mask_gray, angle, reshape=False, mode='reflect')
-        return self.image_rgb, self.mask_gray
+    def blur_image(self):
+        # Random Gaussian blur, image only
+        sigmas = np.arange(0.2, 1.3, 0.1)
+        sigma = sigmas[np.random.randint(0, len(sigmas))]
+        self.image_rgb = ndimage.gaussian_filter(self.image_rgb, sigma=(sigma, sigma, 0))
+        return self.image_rgb
 
     def scale_pair(self):
-        # Random rescale
-        lows, highs = np.arange(0.8, 0.91, 0.01), np.arange(1.1, 1.21, 0.01)
+        # Random rescale, allow for slightly more upscaling than downscaling
+        lows, highs = np.arange(0.9, 1.01, 0.01), np.arange(1.1, 1.21, 0.01)
         scales = np.append(lows, highs)
         scale = scales[np.random.randint(0, len(scales))]
-        self.image_rgb = ndimage.zoom(self.image_rgb, (scale, scale, 1), order=0)  # 0 nearest neighbor
+        self.image_rgb = ndimage.zoom(self.image_rgb, (scale, scale, 1), order=1)  # 1 bi-linear neighbor
         self.mask_gray = ndimage.zoom(self.mask_gray, (scale, scale), order=0)  # 0 nearest neighbor
 
-        # Size correction, crop if upscaled, mirror pad if downscaled
+        # Size correction, crop if upscaled, black pad if downscaled
         if scale > 1:
             dx, dy = self.original_shape
             x0, y0 = 0, 0
@@ -264,29 +254,25 @@ class TilePairAugmenter:
             target_size = self.original_shape
             pad_x = (target_size[0] - self.mask_gray.shape[0]) // 2
             pad_y = (target_size[1] - self.mask_gray.shape[1]) // 2
-            self.image_rgb = np.pad(self.image_rgb, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)), mode='reflect')
-            self.mask_gray = np.pad(self.mask_gray, ((pad_x, pad_x), (pad_y, pad_y)), mode='reflect')
+            self.image_rgb = np.pad(self.image_rgb, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)))
+            self.mask_gray = np.pad(self.mask_gray, ((pad_x, pad_x), (pad_y, pad_y)))
         return self.image_rgb, self.mask_gray
 
-    def hue_image(self):
-        # Random hue jitter, image only
-        lows, highs = np.arange(0.88, 0.99, 0.01), np.arange(1.02, 1.13, 0.01)
-        scales = np.append(lows, highs)
-        r_scl = scales[np.random.randint(0, len(scales))]
-        g_scl = scales[np.random.randint(0, len(scales))]
-        b_scl = scales[np.random.randint(0, len(scales))]
-        self.image_rgb[:, :, 0] = self.image_rgb[:, :, 0] * r_scl
-        self.image_rgb[:, :, 1] = self.image_rgb[:, :, 1] * g_scl
-        self.image_rgb[:, :, 2] = self.image_rgb[:, :, 2] * b_scl
-        self.image_rgb = np.round(self.image_rgb).clip(0, 255).astype(np.uint8)
-        return self.image_rgb
+    def rotate_pair(self):
+        # Random rotation with black padding
+        angles = np.arange(10, 360, 10)
+        angle = angles[np.random.randint(0, len(angles))]
+        self.image_rgb = ndimage.rotate(self.image_rgb, angle, reshape=False, order=1)
+        self.mask_gray = ndimage.rotate(self.mask_gray, angle, reshape=False, order=0)
+        return self.image_rgb, self.mask_gray
 
-    def blur_image(self):
-        # Random Gaussian blur, image only
-        sigmas = np.arange(0, 1.6, 0.1)
-        sigma = sigmas[np.random.randint(0, len(sigmas))]
-        self.image_rgb = ndimage.gaussian_filter(self.image_rgb, sigma=(sigma, sigma, 0))
-        return self.image_rgb
+    def flip_pair(self):
+        # Random mirror flip
+        flip_id = np.random.randint(0, 3)
+        if flip_id:  # 0 none, 1 horizontal, 2 vertical
+            self.image_rgb = np.flip(self.image_rgb, axis=flip_id-1)
+            self.mask_gray = np.flip(self.mask_gray, axis=flip_id-1)
+        return self.image_rgb, self.mask_gray
 
 
 class TileOverLayer:
@@ -324,6 +310,6 @@ class TileOverLayer:
         return None
 
 
-def pseudo_normalize(self) -> np.ndarray:
+def pseudo_normalize(image) -> np.ndarray:
     # Poor man's normalization
-    return self.image / 255
+    return image / 255
