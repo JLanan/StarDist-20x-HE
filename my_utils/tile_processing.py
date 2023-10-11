@@ -310,6 +310,6 @@ class TileOverLayer:
         return None
 
 
-def pseudo_normalize(image) -> np.ndarray:
+def pseudo_normalize(image: np.ndarray) -> np.ndarray:
     # Poor man's normalization
     return image / 255

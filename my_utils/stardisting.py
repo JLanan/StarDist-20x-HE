@@ -1,3 +1,4 @@
+from my_utils.tile_processing import pseudo_normalize
 import json
 import numpy as np
 from stardist.models import StarDist2D, Config2D
@@ -16,9 +17,10 @@ def load_model(model_path: str) -> StarDist2D:
     return model
 
 
-def load_published_he_model(folder_to_write_new_model_folder: str) -> StarDist2D:
+def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str) -> StarDist2D:
     published_model = StarDist2D.from_pretrained('2D_versatile_he')
-    model = StarDist2D(config=Config2D(), basedir=folder_to_write_new_model_folder, name='new_stardist_model')
+    model = StarDist2D(config=Config2D(n_channel_in=3, grid=(2,2), use_gpu=True),
+                       basedir=folder_to_write_new_model_folder, name=name_for_new_model)
     model.keras_model.set_weights(published_model.keras_model.get_weights())
     return model
 
@@ -31,10 +33,13 @@ def configure_model_for_training(model: StarDist2D,
     return model
 
 
-def train_and_threshold(model: StarDist2D,
+def normalize_train_and_threshold(model: StarDist2D,
                         training_images: list[np.ndarray], training_masks: list[np.ndarray],
-                        validation_images: list[np.ndarray], validation_masks: list[np.ndarray]) -> None:
-    # Train the model and optimize probability thresholds on validation data
-    model.train(training_images, training_masks, validation_data=(validation_images, validation_masks))
+                        validation_images: list[np.ndarray], validation_masks: list[np.ndarray]) -> StarDist2D:
+    # Normalize tissue images, train the model and optimize probability thresholds on validation data
+    [pseudo_normalize(img) for img in training_images]
+    [pseudo_normalize(img) for img in validation_images]
+    model.train(training_images, training_masks, validation_data=(validation_images, validation_masks),
+                augmenter=None)
     model.optimize_thresholds(validation_images, validation_masks)
-    return None
+    return model
