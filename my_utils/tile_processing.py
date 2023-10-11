@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from skimage.io import imread, imsave
+import tifffile as tiff
 from skimage import measure
 from scipy import ndimage
 from PIL import Image
@@ -204,31 +205,51 @@ class ScoringSubroutine:
 
 class TilePairAugmenter:
     def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray, random_state: int,
-                 flip: bool = True, rotate: bool = True, scale: bool = True, hue: bool = True, blur: bool = True):
+                 hue: bool = True, blur: bool = True, flip: bool = True,
+                 rotate: bool = True, rotate90: bool = True, scale: bool = True):
         self.image_rgb = np.copy(image_rgb)
         self.mask_gray = np.copy(mask_gray)
         self.original_shape = mask_gray.shape
         np.random.seed(random_state)
+        self.hue = hue
         self.flip = flip
         self.rotate = rotate
+        self.rotate90 = rotate90
         self.scale = scale
         self.blur = blur
         self.augmented_rgb_image, self.augmented_gray_mask = self.augment_pair()
 
     def augment_pair(self) -> (np.ndarray, np.ndarray):
+        if self.hue:
+            self.image_rgb = self.hue_image()
         if self.blur:
             self.image_rgb = self.blur_image()
         if self.scale:
             self.image_rgb, self.mask_gray = self.scale_pair()
         if self.rotate:
             self.image_rgb, self.mask_gray = self.rotate_pair()
+        if self.rotate90:
+            self.image_rgb, self.mask_gray = self.rotate90_pair()
         if self.flip:
             self.image_rgb, self.mask_gray = self.flip_pair()
         return self.image_rgb, self.mask_gray
 
+    def hue_image(self):
+        mean, std = 1, 0.1
+        r_factor = np.random.normal(mean, std)
+        g_factor = np.random.normal(mean, std)
+        b_factor = np.random.normal(mean, std)
+        self.image_rgb = self.image_rgb.astype(np.float32)
+        self.image_rgb[:, :, 0] = self.image_rgb[:, :, 0] * r_factor
+        self.image_rgb[:, :, 1] = self.image_rgb[:, :, 1] * g_factor
+        self.image_rgb[:, :, 2] = self.image_rgb[:, :, 2] * b_factor
+        self.image_rgb = np.clip(self.image_rgb, 0, 255)
+        self.image_rgb = self.image_rgb.astype(np.uint8)
+        return self.image_rgb
+
     def blur_image(self):
         # Random Gaussian blur, image only
-        sigmas = np.arange(0.2, 1.3, 0.1)
+        sigmas = np.arange(0, 1.1, 0.1)
         sigma = sigmas[np.random.randint(0, len(sigmas))]
         self.image_rgb = ndimage.gaussian_filter(self.image_rgb, sigma=(sigma, sigma, 0))
         return self.image_rgb
@@ -264,6 +285,12 @@ class TilePairAugmenter:
         angle = angles[np.random.randint(0, len(angles))]
         self.image_rgb = ndimage.rotate(self.image_rgb, angle, reshape=False, order=1)
         self.mask_gray = ndimage.rotate(self.mask_gray, angle, reshape=False, order=0)
+        return self.image_rgb, self.mask_gray
+
+    def rotate90_pair(self):
+        k = np.random.randint(1, 4)
+        self.image_rgb = np.rot90(self.image_rgb, k=k, axes=(0, 1))
+        self.mask_gray = np.rot90(self.mask_gray, k=k, axes=(0, 1))
         return self.image_rgb, self.mask_gray
 
     def flip_pair(self):

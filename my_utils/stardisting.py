@@ -19,17 +19,19 @@ def load_model(model_path: str) -> StarDist2D:
 
 def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str) -> StarDist2D:
     published_model = StarDist2D.from_pretrained('2D_versatile_he')
-    model = StarDist2D(config=Config2D(n_channel_in=3, grid=(2,2), use_gpu=True),
-                       basedir=folder_to_write_new_model_folder, name=name_for_new_model)
+    configuration = Config2D(n_channel_in=3, grid=(2,2), use_gpu=True, train_patch_size=[128, 128])
+    model = StarDist2D(config=configuration, basedir=folder_to_write_new_model_folder, name=name_for_new_model)
     model.keras_model.set_weights(published_model.keras_model.get_weights())
     return model
 
 
 def configure_model_for_training(model: StarDist2D,
-                                 epochs: int = 5, learning_rate: float = 1e-06, batch_size: int = 4) -> StarDist2D:
+                                 epochs: int = 25, learning_rate: float = 1e-6,
+                                 batch_size: int = 4, patch_size: list[int,int] = [256, 256]) -> StarDist2D:
     model.config.train_epochs = epochs
     model.config.train_learning_rate = learning_rate
     model.config.train_batch_size = batch_size
+    model.config.train_patch_size = patch_size
     return model
 
 
@@ -37,8 +39,8 @@ def normalize_train_and_threshold(model: StarDist2D,
                         training_images: list[np.ndarray], training_masks: list[np.ndarray],
                         validation_images: list[np.ndarray], validation_masks: list[np.ndarray]) -> StarDist2D:
     # Normalize tissue images, train the model and optimize probability thresholds on validation data
-    [pseudo_normalize(img) for img in training_images]
-    [pseudo_normalize(img) for img in validation_images]
+    training_images = [pseudo_normalize(img) for img in training_images]
+    validation_images = [pseudo_normalize(img) for img in validation_images]
     model.train(training_images, training_masks, validation_data=(validation_images, validation_masks),
                 augmenter=None)
     model.optimize_thresholds(validation_images, validation_masks)
