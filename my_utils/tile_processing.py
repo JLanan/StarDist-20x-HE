@@ -2,11 +2,9 @@ import os
 import numpy as np
 import pandas as pd
 from skimage.io import imread, imsave
-import tifffile as tiff
 from skimage import measure
 from scipy import ndimage
 from PIL import Image
-
 
 
 class TileSetReader:
@@ -205,101 +203,89 @@ class ScoringSubroutine:
 
 class TilePairAugmenter:
     def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray, random_state: int,
-                 hue: bool = True, blur: bool = True, flip: bool = True,
-                 rotate: bool = True, rotate90: bool = True, scale: bool = True):
+                 hue: bool = True, blur: bool = True, scale: bool = True,
+                 rotate: bool = True, rotate90: bool = True, flip: bool = True):
         self.image_rgb = np.copy(image_rgb)
         self.mask_gray = np.copy(mask_gray)
         self.original_shape = mask_gray.shape
         np.random.seed(random_state)
-        self.hue = hue
-        self.flip = flip
-        self.rotate = rotate
-        self.rotate90 = rotate90
-        self.scale = scale
-        self.blur = blur
-        self.augmented_rgb_image, self.augmented_gray_mask = self.augment_pair()
+        if hue:
+            self.image_rgb = self.hue_image(self.image_rgb)
+        if blur:
+            self.image_rgb = self.blur_image(self.image_rgb)
+        if scale:
+            self.image_rgb, self.mask_gray = self.scale_pair(self.image_rgb, self.mask_gray, self.original_shape)
+        if rotate:
+            self.image_rgb, self.mask_gray = self.rotate_pair(self.image_rgb, self.mask_gray)
+        if rotate90:
+            self.image_rgb, self.mask_gray = self.rotate90_pair(self.image_rgb, self.mask_gray)
+        if flip:
+            self.image_rgb, self.mask_gray = self.flip_pair(self.image_rgb, self.mask_gray)
 
-    def augment_pair(self) -> (np.ndarray, np.ndarray):
-        if self.hue:
-            self.image_rgb = self.hue_image()
-        if self.blur:
-            self.image_rgb = self.blur_image()
-        if self.scale:
-            self.image_rgb, self.mask_gray = self.scale_pair()
-        if self.rotate:
-            self.image_rgb, self.mask_gray = self.rotate_pair()
-        if self.rotate90:
-            self.image_rgb, self.mask_gray = self.rotate90_pair()
-        if self.flip:
-            self.image_rgb, self.mask_gray = self.flip_pair()
-        return self.image_rgb, self.mask_gray
-
-    def hue_image(self):
-        mean, std = 1, 0.1
+    def hue_image(self, img: np.ndarray):
+        mean, std = 1, 0.05
         r_factor = np.random.normal(mean, std)
         g_factor = np.random.normal(mean, std)
         b_factor = np.random.normal(mean, std)
-        self.image_rgb = self.image_rgb.astype(np.float32)
-        self.image_rgb[:, :, 0] = self.image_rgb[:, :, 0] * r_factor
-        self.image_rgb[:, :, 1] = self.image_rgb[:, :, 1] * g_factor
-        self.image_rgb[:, :, 2] = self.image_rgb[:, :, 2] * b_factor
-        self.image_rgb = np.clip(self.image_rgb, 0, 255)
-        self.image_rgb = self.image_rgb.astype(np.uint8)
-        return self.image_rgb
+        img = img.astype(np.float32)
+        img[:, :, 0] = img[:, :, 0] * r_factor
+        img[:, :, 1] = img[:, :, 1] * g_factor
+        img[:, :, 2] = img[:, :, 2] * b_factor
+        img = np.clip(img, 0, 255)
+        return img.astype(np.uint8)
 
-    def blur_image(self):
+    def blur_image(self, img: np.ndarray):
         # Random Gaussian blur, image only
         sigmas = np.arange(0, 1.1, 0.1)
         sigma = sigmas[np.random.randint(0, len(sigmas))]
-        self.image_rgb = ndimage.gaussian_filter(self.image_rgb, sigma=(sigma, sigma, 0))
-        return self.image_rgb
+        return ndimage.gaussian_filter(img, sigma=(sigma, sigma, 0))
 
-    def scale_pair(self):
-        # Random rescale, allow for slightly more upscaling than downscaling
-        lows, highs = np.arange(0.9, 1.01, 0.01), np.arange(1.1, 1.21, 0.01)
+    def scale_pair(self, img: np.ndarray, msk: np.ndarray, original_shape: tuple):
+        # Random rescale
+        lows, highs = np.arange(0.9, 0.96, 0.01), np.arange(1.01, 1.06, 0.01)
         scales = np.append(lows, highs)
         scale = scales[np.random.randint(0, len(scales))]
-        self.image_rgb = ndimage.zoom(self.image_rgb, (scale, scale, 1), order=1)  # 1 bi-linear neighbor
-        self.mask_gray = ndimage.zoom(self.mask_gray, (scale, scale), order=0)  # 0 nearest neighbor
+        img = ndimage.zoom(img, (scale, scale, 1), order=1)  # 1 bi-linear neighbor
+        msk = ndimage.zoom(msk, (scale, scale), order=0)  # 0 nearest neighbor
 
         # Size correction, crop if upscaled, black pad if downscaled
         if scale > 1:
-            dx, dy = self.original_shape
+            dx, dy = original_shape
             x0, y0 = 0, 0
-            x3, y3 = self.mask_gray.shape
+            x3, y3 = msk.shape
             x1, y1 = np.random.randint(x0, x3 - dx), np.random.randint(y0, y3 - dy)
             x2, y2, = x1 + dx, y1 + dy
-            self.image_rgb = self.image_rgb[x1: x2, y1: y2, :]
-            self.mask_gray = self.mask_gray[x1: x2, y1: y2]
+            img = img[x1: x2, y1: y2, :]
+            msk = msk[x1: x2, y1: y2]
         else:
-            target_size = self.original_shape
-            pad_x = (target_size[0] - self.mask_gray.shape[0]) // 2
-            pad_y = (target_size[1] - self.mask_gray.shape[1]) // 2
-            self.image_rgb = np.pad(self.image_rgb, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)))
-            self.mask_gray = np.pad(self.mask_gray, ((pad_x, pad_x), (pad_y, pad_y)))
-        return self.image_rgb, self.mask_gray
+            target_size = original_shape
+            pad_x = (target_size[0] - msk.shape[0]) // 2
+            pad_y = (target_size[1] - msk.shape[1]) // 2
+            img = np.pad(img, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)))
+            msk = np.pad(msk, ((pad_x, pad_x), (pad_y, pad_y)))
+        return img, msk
 
-    def rotate_pair(self):
+    def rotate_pair(self, img: np.ndarray, msk: np.ndarray):
         # Random rotation with black padding
         angles = np.arange(10, 360, 10)
         angle = angles[np.random.randint(0, len(angles))]
-        self.image_rgb = ndimage.rotate(self.image_rgb, angle, reshape=False, order=1)
-        self.mask_gray = ndimage.rotate(self.mask_gray, angle, reshape=False, order=0)
-        return self.image_rgb, self.mask_gray
+        img = ndimage.rotate(img, angle, reshape=False, order=1)
+        msk = ndimage.rotate(msk, angle, reshape=False, order=0)
+        return img, msk
 
-    def rotate90_pair(self):
+    def rotate90_pair(self, img: np.ndarray, msk: np.ndarray):
         k = np.random.randint(1, 4)
-        self.image_rgb = np.rot90(self.image_rgb, k=k, axes=(0, 1))
-        self.mask_gray = np.rot90(self.mask_gray, k=k, axes=(0, 1))
-        return self.image_rgb, self.mask_gray
+        img = np.rot90(img, k=k, axes=(0, 1))
+        msk = np.rot90(msk, k=k, axes=(0, 1))
+        return img, msk
 
-    def flip_pair(self):
+    def flip_pair(self, img: np.ndarray, msk: np.ndarray):
         # Random mirror flip
         flip_id = np.random.randint(0, 3)
         if flip_id:  # 0 none, 1 horizontal, 2 vertical
-            self.image_rgb = np.flip(self.image_rgb, axis=flip_id-1)
-            self.mask_gray = np.flip(self.mask_gray, axis=flip_id-1)
-        return self.image_rgb, self.mask_gray
+            img = np.flip(img, axis=flip_id-1)
+            msk = np.flip(msk, axis=flip_id-1)
+        return img, msk
 
 
 class TileOverLayer:
