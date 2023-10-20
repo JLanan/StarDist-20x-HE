@@ -1,16 +1,18 @@
-from my_utils import evaluating
+from my_utils import tile_processing as tp
 
-df_results.to_csv(os.path.join(out_folder, f"data {series_id}.csv"), index=False)
 
 gt_folder = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining\Manual Annotations Split\test"
 pred_folder = r"\\babyserverdw5\Digital pathology image lib\HubMap Skin TMC project\230418 HM-SR1-Skin-P009-B1-SB01\Nuclei Segmentations\Tiles and Annotations for Retraining\StarDist Predictions\00\test"
 taus = [0.5, 0.6, 0.7, 0.8, 0.9]
-model_name = "Model_00"
-series_id = 'testing metrics calculator'
+run_id = "test_run"
 
-names, ground_truths, predictions = evaluating.read_tile_sets(gt_folder, pred_folder)
-df_results = evaluating.calculate_metrics(names, ground_truths, predictions, taus, model_name)
-evaluating.save_metrics_df_as_csv(df_results, pred_folder, series_id)
+folders = [gt_folder, pred_folder]
+extensions = ['.tif', '.TIFF']
+tile_set = tp.TileSetReader(folders, extensions).tile_set
 
+scorer = tp.TileSetScorer(base_names=tile_set[0], run_id=run_id,
+                          gt_set=tile_set[1][0], pred_set=tile_set[1][1], taus=taus)
+results_granular = scorer.df_results_granular
+results_summary = scorer.df_results_summary
 
-########## still need to implement hybrid method for cases when GT object centroid is out of body (i.e. concave)
+# Save dataframes to .csv or excel as needed

@@ -18,7 +18,7 @@ use_augmentations = True
 epochs = 5
 lr = 1e-6
 batch_size = 4
-patch_size = [128, 128]
+patch_size = [256, 256]
 
 ####################################################################################################################
 # END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOB

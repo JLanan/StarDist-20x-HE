@@ -9,38 +9,36 @@ from PIL import Image
 
 class TileSetReader:
     def __init__(self, folder_s: str | list[str], extension_s: str | list[str]):
-        self.folder_s = folder_s
-        self.extension_s = extension_s
         if type(folder_s) == str:
-            self.tile_set = self.read_single_tile_set()
+            self.tile_set = self.read_single_tile_set(folder_s, extension_s)
         else:
-            self.tile_set = self.read_multiple_tile_sets()
+            self.tile_sets = self.read_multiple_tile_sets(folder_s, extension_s)
 
-    def read_single_tile_set(self) -> (list[str], list[np.ndarray]):
+    def read_single_tile_set(self, folder, extension) -> (list[str], list[np.ndarray]):
         base_names, tiles = [], []
-        for full_name in os.listdir(self.folder_s):
-            if full_name.endswith(self.extension_s):
+        for full_name in os.listdir(folder):
+            if full_name.endswith(extension):
                 base_name, _ = full_name.rsplit('.', 1)
-                tile = imread(os.path.join(self.folder_s, full_name))
+                tile = imread(os.path.join(folder, full_name))
                 base_names.append(base_name)
                 tiles.append(tile)
         return base_names, tiles
 
-    def read_multiple_tile_sets(self) -> (list[str], list[list[np.ndarray]]):
+    def read_multiple_tile_sets(self, folders, extensions) -> (list[str], list[list[np.ndarray]]):
         """
         Tile names in first set determine search criteria for other sets.
         Secondary sets may have extra tiles, but none missing from the first.
         Can handle different extensions between sets, assuming they are common image types.
         """
-        base_names, tile_sets = [], [[] for _ in range(len(self.folder_s))]
-        first_folder = self.folder_s[0]
+        base_names, tile_sets = [], [[] for _ in range(len(folders))]
+        first_folder = folders[0]
         for full_name in os.listdir(first_folder):
-            if full_name.endswith(self.extension_s[0]):
+            if full_name.endswith(extensions[0]):
                 base_name = full_name.rsplit('.', 1)[0]
                 base_names.append(base_name)
-        for i, folder in enumerate(self.folder_s):
+        for i, folder in enumerate(folders):
             for full_name in os.listdir(folder):
-                if full_name.endswith(self.extension_s[i]):
+                if full_name.endswith(extensions[i]):
                     base_name, _ = full_name.rsplit('.', 1)
                     if base_name in base_names:
                         tile = imread(os.path.join(folder, full_name))
@@ -76,48 +74,33 @@ class TileSetScorer:
     """
     Assumes the vast majority of objects to have internal centroids (i.e. convex)
     """
-    def __init__(self, base_names: list[str], set_id_s: str | list[str], gt_set: list[np.ndarray],
-                 predicted_set_s: list[np.ndarray] | list[list[np.ndarray]], taus: list[float]):
-        self.base_names = base_names
-        self.set_id_s = set_id_s
-        self.gt_set = gt_set
-        self.predicted_set_s = predicted_set_s
-        self.taus = taus
+    def __init__(self, base_names: list[str], run_id: str, gt_set: list[np.ndarray],
+                 pred_set: list[np.ndarray], taus: list[float]):
+        self.df_results_granular = self.score_set(base_names, run_id, gt_set, pred_set, taus)
+        self.df_results_summary = self.summarize_scores(self.df_results_granular)
+
+    def score_set(self, base_names, run_id, gt_set, pred_set, taus) -> pd.DataFrame:
         # Initialize an empty dataframe to store results
-        self.columns = ['Set ID', 'Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
+        columns = ['Run ID', 'Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
                         'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
-        self.df_results = pd.DataFrame(columns=self.columns)
-        if type(set_id_s) == str:
-            self.df_results = self.score_single_set()
-        else:
-            self.df_results = self.score_multiple_sets()
+        df_results = pd.DataFrame(columns=columns)
+        for i, base_name in enumerate(base_names):
+            gt, pred = gt_set[i], pred_set[i]
+            for tau in taus:
+                # Make one line dataframe to concatenate to results
+                results = {'Run ID': [run_id], 'Image': [base_name], 'Tau': [tau]}
+                offset = len(results)
+                scores = ScoringSubroutine(gt, pred, tau).scores
+                for j, score in enumerate(scores):
+                    results[columns[j + offset]] = score
+                df_results = pd.concat([df_results, pd.DataFrame(results)], axis=0, ignore_index=True)
+        return df_results
 
-    def score_single_set(self) -> pd.DataFrame:
-        for i, base_name in enumerate(self.base_names):
-            gt, pred = self.gt_set[i], self.predicted_set_s[i]
-            for tau in self.taus:
-                scorer = ScoringSubroutine(gt, pred, tau)
-                scores = scorer.calculate_scores()
-                # One line dataframe to append to results
-                results = {'Set ID': [self.set_id_s], 'Image': [base_name], 'Tau': [tau]}
-                for j in range(len(self.columns)):
-                    results = {self.columns[j]: [scores[j]]}
-                self.df_results = pd.concat([self.df_results, pd.DataFrame(results)], axis=0, ignore_index=True)
-        return self.df_results
-
-    def score_multiple_sets(self) -> list[pd.DataFrame]:
-        for k, pred_set in enumerate(self.predicted_set_s):
-            for i, base_name in enumerate(self.base_names):
-                gt, pred = self.gt_set[i], pred_set[i]
-                for tau in self.taus:
-                    scorer = ScoringSubroutine(gt, pred, tau)
-                    scores = scorer.calculate_scores()
-                    # One line dataframe to append to results
-                    results = {'Set ID': [self.set_id_s[k]], 'Image': [base_name], 'Tau': [tau]}
-                    for j in range(len(self.columns)):
-                        results = {self.columns[j]: [scores[j]]}
-                    self.df_results = pd.concat([self.df_results, pd.DataFrame(results)], axis=0, ignore_index=True)
-        return self.df_results
+    def summarize_scores(self, df_granular) -> pd.DataFrame:
+        df_summary = \
+            df_granular.groupby(['Run ID', 'Image']).agg({'IoU': 'median', 'Avg Precision': 'mean'}).reset_index()
+        df_summary.columns = ['Run ID', 'Image', 'IoU', 'mAP']
+        return df_summary
 
 
 class ScoringSubroutine:
@@ -125,11 +108,9 @@ class ScoringSubroutine:
     Assumes the vast majority of objects to have internal centroids (i.e. convex)
     """
     def __init__(self, gt: np.ndarray, pred: np.ndarray, tau: float):
-        self.gt = gt
-        self.pred = pred
-        self.tau = tau
-        self.gt_centroids = self.find_centroids(gt)
-        self.pred_centroids = self.find_centroids(pred)
+        gt_centroids = self.find_centroids(gt)
+        pred_centroids = self.find_centroids(pred)
+        self.scores = self.calculate_scores(gt, pred, tau, gt_centroids, pred_centroids)
 
     def find_centroids(self, mask: np.ndarray) -> list[list[int, int]]:
         # Finds centroid coordinates as weighted averages of binary pixel values
@@ -141,10 +122,12 @@ class ScoringSubroutine:
             centroids.append([x, y])
         return centroids
 
-    def calculate_scores(self) -> (float, int, int, int, float, float, float, float, float, float):
-        iou = self.calc_iou(self.gt, self.pred)
-        tp, fp, seg_qual = self.calc_tp_fp_sg()
-        fn = self.calc_fn()
+    def calculate_scores(self, gt: np.ndarray, pred: np.ndarray, tau: float,
+                         gt_centroids: list[list[int, int]], pred_centroids: list[list[int, int]]) \
+            -> (float, int, int, int, float, float, float, float, float, float):
+        iou = self.calc_iou(gt, pred)
+        tp, fp, seg_qual = self.calc_tp_fp_sg(gt, pred, tau, pred_centroids)
+        fn = self.calc_fn(gt, pred, tau, gt_centroids)
         if not tp:
             precision, recall, avg_precision, f1 = 0, 0, 0, 0
         else:
@@ -155,7 +138,7 @@ class ScoringSubroutine:
         pan_qual = seg_qual * f1
         return iou, tp, fp, fn, precision, recall, avg_precision, f1, seg_qual, pan_qual
 
-    def calc_iou(self, array1: np.ndarray, array2: np.ndarray) -> float:
+    def calc_iou(self, array1: np.ndarray | bool, array2: np.ndarray | bool) -> float:
         # Compares pixel-to-pixel coverage of any pixel greater than 0
         intersection = np.logical_and(array1, array2)
         union = np.logical_or(array1, array2)
@@ -163,18 +146,19 @@ class ScoringSubroutine:
         union_area = np.sum(union)
         return intersection_area / union_area
 
-    def calc_tp_fp_sg(self) -> (int, int, float):
+    def calc_tp_fp_sg(self, gt: np.ndarray, pred: np.ndarray, tau: float, pred_centroids: list[list[int, int]]) \
+            -> (int, int, float):
         # Assumes the vast majority of object centroids are internal (i.e. convex objects)
         tp, fp, sum_tp_iou = 0, 0, 0.0
-        for centroid in self.pred_centroids:
+        for centroid in pred_centroids:
             x, y = centroid[0], centroid[1]
-            gt_val_at_pred_centroid = self.gt[x][y]
-            pred_val_at_pred_centroid = self.pred[x][y]
+            gt_val_at_pred_centroid = gt[x][y]
+            pred_val_at_pred_centroid = pred[x][y]
             if gt_val_at_pred_centroid:
-                binary_mask_gt = (self.gt == gt_val_at_pred_centroid)
-                binary_mask_pred = (self.pred == pred_val_at_pred_centroid)
+                binary_mask_gt = (gt == gt_val_at_pred_centroid)
+                binary_mask_pred = (pred == pred_val_at_pred_centroid)
                 iou = self.calc_iou(binary_mask_gt, binary_mask_pred)
-                if iou >= self.tau:
+                if iou >= tau:
                     tp += 1
                     sum_tp_iou += iou
                 else:
@@ -184,17 +168,17 @@ class ScoringSubroutine:
         sg = sum_tp_iou / tp if tp > 0 else 0
         return tp, fp, sg
 
-    def calc_fn(self) -> int:
+    def calc_fn(self, gt: np.ndarray, pred: np.ndarray, tau: float, gt_centroids: list[list[int, int]]) -> int:
         fn = 0
-        for centroid in self.gt_centroids:
+        for centroid in gt_centroids:
             x, y = centroid[0], centroid[1]
-            pred_val_at_gt_centroid = self.pred[x][y]
-            gt_val_at_gt_centroid = self.gt[x][y]
+            pred_val_at_gt_centroid = pred[x][y]
+            gt_val_at_gt_centroid = gt[x][y]
             if pred_val_at_gt_centroid:
-                binary_mask_gt = (self.gt == gt_val_at_gt_centroid)
-                binary_mask_pred = (self.pred == pred_val_at_gt_centroid)
+                binary_mask_gt = (gt == gt_val_at_gt_centroid)
+                binary_mask_pred = (pred == pred_val_at_gt_centroid)
                 iou = self.calc_iou(binary_mask_gt, binary_mask_pred)
-                if iou < self.tau:
+                if iou < tau:
                     fn += 1
             else:
                 fn += 1
@@ -205,22 +189,22 @@ class TilePairAugmenter:
     def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray, random_state: int,
                  hue: bool = True, blur: bool = True, scale: bool = True,
                  rotate: bool = True, rotate90: bool = True, flip: bool = True):
-        self.image_rgb = np.copy(image_rgb)
-        self.mask_gray = np.copy(mask_gray)
-        self.original_shape = mask_gray.shape
+        original_shape = mask_gray.shape
+        image_rgb = np.copy(image_rgb)
+        mask_gray = np.copy(mask_gray)
         np.random.seed(random_state)
         if hue:
-            self.image_rgb = self.hue_image(self.image_rgb)
+            self.image_rgb = self.hue_image(image_rgb)
         if blur:
-            self.image_rgb = self.blur_image(self.image_rgb)
+            self.image_rgb = self.blur_image(image_rgb)
         if scale:
-            self.image_rgb, self.mask_gray = self.scale_pair(self.image_rgb, self.mask_gray, self.original_shape)
+            self.image_rgb, self.mask_gray = self.scale_pair(image_rgb, mask_gray, original_shape)
         if rotate:
-            self.image_rgb, self.mask_gray = self.rotate_pair(self.image_rgb, self.mask_gray)
+            self.image_rgb, self.mask_gray = self.rotate_pair(image_rgb, mask_gray)
         if rotate90:
-            self.image_rgb, self.mask_gray = self.rotate90_pair(self.image_rgb, self.mask_gray)
+            self.image_rgb, self.mask_gray = self.rotate90_pair(image_rgb, mask_gray)
         if flip:
-            self.image_rgb, self.mask_gray = self.flip_pair(self.image_rgb, self.mask_gray)
+            self.image_rgb, self.mask_gray = self.flip_pair(image_rgb, mask_gray)
 
     def hue_image(self, img: np.ndarray):
         mean, std = 1, 0.05

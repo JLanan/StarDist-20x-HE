@@ -19,13 +19,13 @@ desired_extension = '.TIFF'
 # END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOB
 ####################################################################################################################
 
-linked_tile_fetcher = tp.TileSetReader([img_folder_in, msk_folder_in], [desired_extension, desired_extension])
-tile_set = linked_tile_fetcher.read_multiple_tile_sets()
+reader = tp.TileSetReader([img_folder_in, msk_folder_in], [desired_extension, desired_extension])
+tile_sets = reader.tile_sets
 
 tile_set_aug = ([], [[], []])
-for i, basename in enumerate(tile_set[0]):
-    img = tile_set[1][0][i]
-    msk = tile_set[1][1][i]
+for i, basename in enumerate(tile_sets[0]):
+    img = tile_sets[1][0][i]
+    msk = tile_sets[1][1][i]
 
     augmentation = tp.TilePairAugmenter(img, msk, random_state=i,
                                         hue=hue, blur=blur, scale=scale, rotate=rotate, rotate90=rotate90, flip=flip)
