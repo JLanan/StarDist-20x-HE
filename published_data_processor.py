@@ -1,10 +1,8 @@
 from my_utils import published_data_processing as pub
-import numpy as np
 
 
 root_dir = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets"
 datasets = ['CoNSeP', 'CryoNuSeg', 'MoNuSeg', 'TNBC']
-np.random.seed(7)
 
 # Establish folder trees for 40x, 20x, and 20x_split if not already existing
 pub.initialize_folder_tree(root_dir, datasets)

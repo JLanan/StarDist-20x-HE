@@ -69,6 +69,7 @@ def cryonuseg_raw_to_40x(root: str) -> None:
                 x, y = rois[key]['x'], rois[key]['y']
                 x_crds_fill, y_crds_fill = draw.polygon(x, y, msk.shape)
                 msk[x_crds_fill, y_crds_fill] = i + 1
+            msk = msk.T
             dataset['Tile Names'].append(tile_name)  # .tif is desired extension, no need to splice
             dataset['Images'].append(img)
             dataset['Masks'].append(msk)
