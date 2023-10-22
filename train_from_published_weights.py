@@ -1,6 +1,7 @@
 from my_utils import stardisting as sd
 from my_utils import tile_processing as tp
 
+ext = '.TIFF'
 
 trn_img_folder_in = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\train\CoNSeP+CryoNuSeg\images"
 trn_msk_folder_in = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\train\CoNSeP+CryoNuSeg\masks"
@@ -24,15 +25,11 @@ patch_size = [256, 256]
 # END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOB
 ####################################################################################################################
 
-linked_tile_fetcher = tp.TileSetReader([vld_img_folder_in, vld_msk_folder_in], ['.TIFF', '.TIFF'])
-validation_set = linked_tile_fetcher.read_multiple_tile_sets()
-
-linked_tile_fetcher = tp.TileSetReader([trn_img_folder_in, trn_msk_folder_in], ['.TIFF', '.TIFF'])
-training_set = linked_tile_fetcher.read_multiple_tile_sets()
+training_set = tp.TileSetReader([trn_img_folder_in, trn_msk_folder_in], [ext, ext]).tile_sets
+validation_set = tp.TileSetReader([vld_img_folder_in, vld_msk_folder_in], [ext, ext]).tile_sets
 
 if use_augmentations:
-    linked_tile_fetcher = tp.TileSetReader([trn_img_aug_folder_in, trn_msk_aug_folder_in], ['.TIFF', '.TIFF'])
-    training_set_aug = linked_tile_fetcher.read_multiple_tile_sets()
+    training_set_aug = tp.TileSetReader([trn_img_aug_folder_in, trn_msk_aug_folder_in], [ext, ext]).tile_sets
     # Append tile names, images, and masks
     [training_set[0].append(training_set_aug[0][i]) for i, name in enumerate(training_set_aug[0])]
     [training_set[1][0].append(training_set_aug[1][0][i]) for i, img in enumerate(training_set_aug[1][0])]

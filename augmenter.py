@@ -40,4 +40,3 @@ linked_tile_saver = tp.TileSetWriter(folder_s=[img_aug_folder_out, msk_aug_folde
                                      base_names=tile_set_aug[0],
                                      tile_set_s=[tile_set_aug[1][0], tile_set_aug[1][1]],
                                      desired_extension=desired_extension)
-linked_tile_saver.write_multiple_tile_sets()

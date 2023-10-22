@@ -1,5 +1,5 @@
-from my_utils import stardisting
-from my_utils import tile_processing
+from my_utils import stardisting as sd
+from my_utils import tile_processing as tp
 import os
 import zarr
 import numpy as np
@@ -17,7 +17,7 @@ class WSISegmenter:
         self.wsi = OpenSlide(wsi_path)
         self.dims = self.wsi.level_dimensions[level][::-1]
         self.output_folder = output_folder
-        self.model = stardisting.load_model(model_path)
+        self.model = sd.load_model(model_path)
         self.model.config.n_rays = n_rays
         if detect_20x:
             self.level = self.find_wsi_20x_level()
@@ -79,7 +79,7 @@ class WSISegmenter:
 
                 # Read RGBA PIL object tile into memory, convert to RGB numpy array, and normalize
                 tile = self.tiles.get_tile(level=self.tiles.level_count - self.level - 1, address=(x, y))
-                tile = tile_processing.pseudo_normalize(np.asarray(tile.convert('RGB')))
+                tile = tp.pseudo_normalize(np.asarray(tile.convert('RGB')))
 
                 # Perform the prediction, override thresholds. Delete object probability outputs, no common usage.
                 label, results = self.model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
@@ -123,7 +123,8 @@ class WSISegmenter:
             results['coord'] = np.delete(results['coord'], blackouts, axis=0)
         return label, results
 
-    def globalize(self, label: np.ndarray, results: dict, count: int, upper: int, left: int) -> (np.ndarray, dict):
+    @staticmethod
+    def globalize(label: np.ndarray, results: dict, count: int, upper: int, left: int) -> (np.ndarray, dict):
         # Add accumulated nuclei count to nonzero values on the label
         label[label != 0] += count
 

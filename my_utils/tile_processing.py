@@ -14,7 +14,8 @@ class TileSetReader:
         else:
             self.tile_sets = self.read_multiple_tile_sets(folder_s, extension_s)
 
-    def read_single_tile_set(self, folder, extension) -> (list[str], list[np.ndarray]):
+    @staticmethod
+    def read_single_tile_set(folder, extension) -> (list[str], list[np.ndarray]):
         base_names, tiles = [], []
         for full_name in os.listdir(folder):
             if full_name.endswith(extension):
@@ -24,7 +25,8 @@ class TileSetReader:
                 tiles.append(tile)
         return base_names, tiles
 
-    def read_multiple_tile_sets(self, folders, extensions) -> (list[str], list[list[np.ndarray]]):
+    @staticmethod
+    def read_multiple_tile_sets(folders, extensions) -> (list[str], list[list[np.ndarray]]):
         """
         Tile names in first set determine search criteria for other sets.
         Secondary sets may have extra tiles, but none missing from the first.
@@ -49,24 +51,23 @@ class TileSetReader:
 class TileSetWriter:
     def __init__(self, folder_s: str | list[str], base_names: list[str],
                  tile_set_s: list[np.ndarray] | list[list[np.ndarray]], desired_extension: str = '.tif'):
-        self.folder_s = folder_s
-        self.base_names = base_names
-        self.tile_set_s = tile_set_s
-        self.desired_extension = desired_extension
         if type(folder_s) == str:
-            self.write_single_tile_set()
+            self.write_single_tile_set(folder_s, base_names, tile_set_s, desired_extension)
         else:
-            self.write_multiple_tile_sets()
+            self.write_multiple_tile_sets(folder_s, base_names, tile_set_s, desired_extension)
 
-    def write_single_tile_set(self) -> None:
-        for i, tile in enumerate(self.tile_set_s):
-            imsave(os.path.join(self.folder_s, self.base_names[i] + self.desired_extension), tile)
+    @staticmethod
+    def write_single_tile_set(folder: str, base_names: list[str], tile_set: list[np.ndarray], ext: str) -> None:
+        for i, tile in enumerate(tile_set):
+            imsave(os.path.join(folder, base_names[i] + ext), tile)
         return None
 
-    def write_multiple_tile_sets(self) -> None:
-        for j, tile_set in enumerate(self.tile_set_s):
+    @staticmethod
+    def write_multiple_tile_sets(folders: list[str], base_names: list[str],
+                                 tile_sets: list[list[np.ndarray]], ext: str) -> None:
+        for j, tile_set in enumerate(tile_sets):
             for i, tile in enumerate(tile_set):
-                imsave(os.path.join(self.folder_s[j], self.base_names[i] + self.desired_extension), tile)
+                imsave(os.path.join(folders[j], base_names[i] + ext), tile)
         return None
 
 
@@ -79,7 +80,8 @@ class TileSetScorer:
         self.df_results_granular = self.score_set(base_names, run_id, gt_set, pred_set, taus)
         self.df_results_summary = self.summarize_scores(self.df_results_granular)
 
-    def score_set(self, base_names, run_id, gt_set, pred_set, taus) -> pd.DataFrame:
+    @staticmethod
+    def score_set(base_names, run_id, gt_set, pred_set, taus) -> pd.DataFrame:
         # Initialize an empty dataframe to store results
         columns = ['Run ID', 'Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
                         'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
@@ -96,7 +98,8 @@ class TileSetScorer:
                 df_results = pd.concat([df_results, pd.DataFrame(results)], axis=0, ignore_index=True)
         return df_results
 
-    def summarize_scores(self, df_granular) -> pd.DataFrame:
+    @staticmethod
+    def summarize_scores(df_granular) -> pd.DataFrame:
         df_summary = \
             df_granular.groupby(['Run ID', 'Image']).agg({'IoU': 'median', 'Avg Precision': 'mean'}).reset_index()
         df_summary.columns = ['Run ID', 'Image', 'IoU', 'mAP']
@@ -112,7 +115,8 @@ class ScoringSubroutine:
         pred_centroids = self.find_centroids(pred)
         self.scores = self.calculate_scores(gt, pred, tau, gt_centroids, pred_centroids)
 
-    def find_centroids(self, mask: np.ndarray) -> list[list[int, int]]:
+    @staticmethod
+    def find_centroids(mask: np.ndarray) -> list[list[int, int]]:
         # Finds centroid coordinates as weighted averages of binary pixel values
         centroids = []
         for object_id in np.unique(mask)[1:]:
@@ -138,7 +142,8 @@ class ScoringSubroutine:
         pan_qual = seg_qual * f1
         return iou, tp, fp, fn, precision, recall, avg_precision, f1, seg_qual, pan_qual
 
-    def calc_iou(self, array1: np.ndarray | bool, array2: np.ndarray | bool) -> float:
+    @staticmethod
+    def calc_iou(array1: np.ndarray | bool, array2: np.ndarray | bool) -> float:
         # Compares pixel-to-pixel coverage of any pixel greater than 0
         intersection = np.logical_and(array1, array2)
         union = np.logical_or(array1, array2)
@@ -206,7 +211,8 @@ class TilePairAugmenter:
         if flip:
             self.image_rgb, self.mask_gray = self.flip_pair(image_rgb, mask_gray)
 
-    def hue_image(self, img: np.ndarray):
+    @staticmethod
+    def hue_image(img: np.ndarray):
         mean, std = 1, 0.05
         r_factor = np.random.normal(mean, std)
         g_factor = np.random.normal(mean, std)
@@ -218,13 +224,15 @@ class TilePairAugmenter:
         img = np.clip(img, 0, 255)
         return img.astype(np.uint8)
 
-    def blur_image(self, img: np.ndarray):
+    @staticmethod
+    def blur_image(img: np.ndarray):
         # Random Gaussian blur, image only
         sigmas = np.arange(0, 1.1, 0.1)
         sigma = sigmas[np.random.randint(0, len(sigmas))]
         return ndimage.gaussian_filter(img, sigma=(sigma, sigma, 0))
 
-    def scale_pair(self, img: np.ndarray, msk: np.ndarray, original_shape: tuple):
+    @staticmethod
+    def scale_pair(img: np.ndarray, msk: np.ndarray, original_shape: tuple):
         # Random rescale
         lows, highs = np.arange(0.9, 0.96, 0.01), np.arange(1.01, 1.06, 0.01)
         scales = np.append(lows, highs)
@@ -249,7 +257,8 @@ class TilePairAugmenter:
             msk = np.pad(msk, ((pad_x, pad_x), (pad_y, pad_y)))
         return img, msk
 
-    def rotate_pair(self, img: np.ndarray, msk: np.ndarray):
+    @staticmethod
+    def rotate_pair(img: np.ndarray, msk: np.ndarray):
         # Random rotation with black padding
         angles = np.arange(10, 360, 10)
         angle = angles[np.random.randint(0, len(angles))]
@@ -257,13 +266,15 @@ class TilePairAugmenter:
         msk = ndimage.rotate(msk, angle, reshape=False, order=0)
         return img, msk
 
-    def rotate90_pair(self, img: np.ndarray, msk: np.ndarray):
+    @staticmethod
+    def rotate90_pair(img: np.ndarray, msk: np.ndarray):
         k = np.random.randint(1, 4)
         img = np.rot90(img, k=k, axes=(0, 1))
         msk = np.rot90(msk, k=k, axes=(0, 1))
         return img, msk
 
-    def flip_pair(self, img: np.ndarray, msk: np.ndarray):
+    @staticmethod
+    def flip_pair(img: np.ndarray, msk: np.ndarray):
         # Random mirror flip
         flip_id = np.random.randint(0, 3)
         if flip_id:  # 0 none, 1 horizontal, 2 vertical
@@ -275,18 +286,16 @@ class TilePairAugmenter:
 class TileOverLayer:
     def __init__(self, tissue_frame: np.ndarray,
                  mask_frame_s: np.ndarray | list[np.ndarray], rgb_s: list[int] | list[list[int]]):
-        self.tissue = tissue_frame
-        self.mask_frame_s = mask_frame_s
-        self.rgb_s = rgb_s
         self.frames = [tissue_frame]
         if type(mask_frame_s) == np.ndarray:
-            self.frames.append(self.make_overlay(mask_frame_s, rgb_s))
+            self.frames.append(self.make_overlay(tissue_frame, mask_frame_s, rgb_s))
         else:
             for i, mask_frame in enumerate(mask_frame_s):
-                self.frames.append(self.make_overlay(mask_frame, rgb_s[i]))
+                self.frames.append(self.make_overlay(tissue_frame, mask_frame, rgb_s[i]))
 
-    def make_overlay(self, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
-        image, mask = np.copy(self.tissue), np.copy(mask)
+    @staticmethod
+    def make_overlay(tissue: np.ndarray, mask: np.ndarray, rgb: list[int]) -> np.ndarray:
+        image, mask = np.copy(tissue), np.copy(mask)
         contour_set = []
         object_ids = np.unique(mask[mask != 0])
         # Loop through each object id and record contour coordinates
@@ -301,7 +310,8 @@ class TileOverLayer:
                 image[np.round(contour[:, 0]).astype(int), np.round(contour[:, 1]).astype(int)] = rgb
         return image
 
-    def save_frames_as_gif(self, gif_out_path: str, frames: list[np.ndarray], duration: int) -> None:
+    @staticmethod
+    def save_frames_as_gif(gif_out_path: str, frames: list[np.ndarray], duration: int) -> None:
         frames = [Image.fromarray(frame) for frame in frames]
         frames[0].save(gif_out_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration, loop=0)
         return None
