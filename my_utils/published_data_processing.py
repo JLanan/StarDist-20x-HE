@@ -3,6 +3,7 @@ import os
 from skimage.io import imread, imsave
 from skimage import draw
 from skimage.transform import rescale
+from skimage.color import rgba2rgb
 from scipy.io import loadmat
 from read_roi import read_roi_zip
 import xml.etree.ElementTree as ET
@@ -47,8 +48,11 @@ def consep_raw_to_40x(root: str) -> None:
     dir_images = os.path.join(dir_data, 'images')
     dir_masks = os.path.join(dir_data, 'masks')
     for i, name in enumerate(dataset['Tile Names']):
-        imsave(os.path.join(dir_images, name + '.tif'), dataset['Images'][i])
-        imsave(os.path.join(dir_masks, name + '.tif'), dataset['Masks'][i])
+        img, msk = dataset['Images'][i], dataset['Masks'][i]
+        if img.shape[2] == 4:
+            img = rgba2rgb(img)
+        imsave(os.path.join(dir_images, name + '.tif'), img)
+        imsave(os.path.join(dir_masks, name + '.tif'), msk)
     return None
 
 
@@ -78,8 +82,11 @@ def cryonuseg_raw_to_40x(root: str) -> None:
     dir_images = os.path.join(dir_data, 'images')
     dir_masks = os.path.join(dir_data, 'masks')
     for i, name in enumerate(dataset['Tile Names']):
-        imsave(os.path.join(dir_images, name), dataset['Images'][i])
-        imsave(os.path.join(dir_masks, name), dataset['Masks'][i])
+        img, msk = dataset['Images'][i], dataset['Masks'][i]
+        if img.shape[2] == 4:
+            img = rgba2rgb(img)
+        imsave(os.path.join(dir_images, name + '.tif'), img)
+        imsave(os.path.join(dir_masks, name + '.tif'), msk)
     return None
 
 
@@ -120,8 +127,11 @@ def monuseg_raw_to_40x(root: str) -> None:
     dir_images = os.path.join(dir_data, 'images')
     dir_masks = os.path.join(dir_data, 'masks')
     for i, name in enumerate(dataset['Tile Names']):
-        imsave(os.path.join(dir_images, name), dataset['Images'][i])
-        imsave(os.path.join(dir_masks, name), dataset['Masks'][i])
+        img, msk = dataset['Images'][i], dataset['Masks'][i]
+        if img.shape[2] == 4:
+            img = rgba2rgb(img)
+        imsave(os.path.join(dir_images, name + '.tif'), img)
+        imsave(os.path.join(dir_masks, name + '.tif'), msk)
     return None
 
 
@@ -150,8 +160,11 @@ def tnbc_raw_to_40x(root: str) -> None:
     dir_images = os.path.join(dir_data, 'images')
     dir_masks = os.path.join(dir_data, 'masks')
     for i, name in enumerate(dataset['Tile Names']):
-        imsave(os.path.join(dir_images, name + '.tif'), dataset['Images'][i])
-        imsave(os.path.join(dir_masks, name + '.tif'), dataset['Masks'][i])
+        img, msk = dataset['Images'][i], dataset['Masks'][i]
+        if img.shape[2] == 4:
+            img = rgba2rgb(img)
+        imsave(os.path.join(dir_images, name + '.tif'), img)
+        imsave(os.path.join(dir_masks, name + '.tif'), msk)
     return None
 
 

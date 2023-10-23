@@ -7,7 +7,7 @@ datasets = ['CoNSeP', 'CryoNuSeg', 'MoNuSeg', 'TNBC']
 # Establish folder trees for 40x and 20x if not already existing
 pub.initialize_folder_tree(root_dir, datasets)
 
-# Process dataset tissue tiles to 40x 8bit. Masks to 40x 16bit instance maps. Write to disc as .tif
+# Process dataset tissue tiles to 40x 8bit RGB. Masks to 40x 16bit instance maps. Write to disc as .tif
 for dataset in datasets:
     if dataset == 'CoNSeP':
         pub.consep_raw_to_40x(root_dir)
