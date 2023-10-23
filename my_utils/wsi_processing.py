@@ -6,7 +6,7 @@ with os.add_dll_directory(OPENSLIDE_PATH):
     from openslide import OpenSlide
 
 
-class RegionCoExtraction:
+class RegionCoExtractor:
     def __init__(self, wsi: str | OpenSlide, z_label: str | zarr.core.Array,
                  x_mu_cp: float, y_mu_cp: float, width: int, height: int):
         self.x_mu_cp = x_mu_cp
