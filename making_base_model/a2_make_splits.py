@@ -121,7 +121,7 @@ def get_kfold_ids(id_count: int, k: int) -> list[tuple[list[int], list[int]]]:
 
 
 def get_kfolds(tv: list[list[str, list[str], list[np.ndarray], list[np.ndarray]]], k: int) -> \
-        list[list[str, list, list]]:
+        [[str, [list, list], [], [], [], []]]:
     kfolds_all_datasets = []
     for dataset in tv:
         name = dataset[0]
@@ -138,17 +138,35 @@ def get_kfolds(tv: list[list[str, list[str], list[np.ndarray], list[np.ndarray]]
             vld_tile_names = [tile_names[i] for i in vld_ids]
             vld_images = [images[i] for i in vld_ids]
             vld_masks = [masks[i] for i in vld_ids]
-            kfolds.append([[[trn_tile_names], [trn_images], [trn_masks]], [vld_tile_names], [vld_images], [vld_masks]])
+            kfolds.append([[trn_tile_names, trn_images, trn_masks], [vld_tile_names, vld_images, vld_masks]])
         kfolds_all_datasets.append(kfolds)
     return kfolds_all_datasets   #################### it ain't right
 
 
 def write_fold_data(root_dir: str, data: list[list[str, list, list]]) -> None:
-    split_dir = os.path.join(root_dir, '20x_split')
+    root_dir = os.path.join(root_dir, '20x_split')
     for dataset in data:
-        for k_fold in range(len(dataset) - 1):
-            fold_data = dataset[k_fold + 1]
-            trn, vld = fold_data[0], vld[1]
+        name = dataset[0]
+        k = 0
+        for fold in dataset[1:]:
+            k += 1
+            trn, vld = fold[0], fold[1]
+            trn_img_dir = os.path.join(root_dir, f'fold_{k}' + '\\train\\' + f'{name}' + '\\images')
+            vld_img_dir = os.path.join(root_dir, f'fold_{k}' + '\\validate\\' + f'{name}' + '\\images')
+            trn_msk_dir = os.path.join(root_dir, f'fold_{k}' + '\\train\\' + f'{name}' + '\\masks')
+            vld_msk_dir = os.path.join(root_dir, f'fold_{k}' + '\\validate\\' + f'{name}' + '\\masks')
+
+            for i, tile_name in enumerate(trn[0]):
+                img_path = os.path.join(trn_img_dir, tile_name + '.tif')
+                msk_path = os.path.join(trn_msk_dir, tile_name + '.tif')
+                tiff.imwrite(img_path, trn[1][i])
+                tiff.imwrite(msk_path, trn[2][i])
+
+            for i, tile_name in enumerate(vld[0]):
+                img_path = os.path.join(vld_img_dir, tile_name + '.tif')
+                msk_path = os.path.join(vld_msk_dir, tile_name + '.tif')
+                tiff.imwrite(img_path, vld[1][i])
+                tiff.imwrite(msk_path, vld[2][i])
     return None
 
 
