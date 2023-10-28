@@ -11,9 +11,9 @@ folders = [gt_folder, pred_folder]
 extensions = ['.tif', '.TIFF']
 tile_sets = tp.TileSetReader(folders, extensions).tile_sets
 
-scorer = tp.TileSetScorer(base_names=tile_sets[0], run_id=run_id,
-                          gt_set=tile_sets[1][0], pred_set=tile_sets[1][1], taus=taus)
+scorer = tp.TileSetScorer(base_names=tile_sets[0], gt_set=tile_sets[1][0], pred_set=tile_sets[1][1], taus=taus)
 results_granular = scorer.df_results_granular
 results_summary = scorer.df_results_summary
 
+x=5
 # Save dataframes to .csv or excel as needed

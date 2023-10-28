@@ -75,22 +75,22 @@ class TileSetScorer:
     """
     Assumes the vast majority of objects to have internal centroids (i.e. convex)
     """
-    def __init__(self, base_names: list[str], run_id: str, gt_set: list[np.ndarray],
+    def __init__(self, base_names: list[str], gt_set: list[np.ndarray],
                  pred_set: list[np.ndarray], taus: list[float]):
-        self.df_results_granular = self.score_set(base_names, run_id, gt_set, pred_set, taus)
+        self.df_results_granular = self.score_set(base_names, gt_set, pred_set, taus)
         self.df_results_summary = self.summarize_scores(self.df_results_granular)
 
     @staticmethod
-    def score_set(base_names, run_id, gt_set, pred_set, taus) -> pd.DataFrame:
+    def score_set(base_names, gt_set, pred_set, taus) -> pd.DataFrame:
         # Initialize an empty dataframe to store results
-        columns = ['Run ID', 'Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
+        columns = ['Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
                         'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
         df_results = pd.DataFrame(columns=columns)
         for i, base_name in enumerate(base_names):
             gt, pred = gt_set[i], pred_set[i]
             for tau in taus:
                 # Make one line dataframe to concatenate to results
-                results = {'Run ID': [run_id], 'Image': [base_name], 'Tau': [tau]}
+                results = {'Image': [base_name], 'Tau': [tau]}
                 offset = len(results)
                 scores = ScoringSubroutine(gt, pred, tau).scores
                 for j, score in enumerate(scores):
@@ -101,8 +101,8 @@ class TileSetScorer:
     @staticmethod
     def summarize_scores(df_granular) -> pd.DataFrame:
         df_summary = \
-            df_granular.groupby(['Run ID', 'Image']).agg({'IoU': 'median', 'Avg Precision': 'mean'}).reset_index()
-        df_summary.columns = ['Run ID', 'Image', 'IoU', 'mAP']
+            df_granular.groupby(['Image']).agg({'IoU': 'median', 'Avg Precision': 'mean'}).reset_index()
+        df_summary.columns = ['Image', 'IoU', 'mAP']
         return df_summary
 
 
