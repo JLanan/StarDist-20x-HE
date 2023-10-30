@@ -74,7 +74,7 @@ def cryonuseg_raw_to_40x(root: str) -> None:
                 x_crds_fill, y_crds_fill = draw.polygon(x, y, msk.shape)
                 msk[x_crds_fill, y_crds_fill] = i + 1
             msk = msk.T
-            dataset['Tile Names'].append(tile_name)  # .tif is desired extension, no need to splice
+            dataset['Tile Names'].append(tile_name[:-4])
             dataset['Images'].append(img)
             dataset['Masks'].append(msk)
     dir_40x = os.path.join(root, '40x')
@@ -119,7 +119,7 @@ def monuseg_raw_to_40x(root: str) -> None:
                                         x_crds_fill, y_crds_fill = draw.polygon(x, y, msk.shape)
                                         msk[x_crds_fill, y_crds_fill] = count + 1
                     msk = msk.T
-                    dataset['Tile Names'].append(tile_name)  # .tif is desired extension, no need to splice
+                    dataset['Tile Names'].append(tile_name[:-4])
                     dataset['Images'].append(img)
                     dataset['Masks'].append(msk)
     dir_40x = os.path.join(root, '40x')

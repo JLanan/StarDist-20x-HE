@@ -19,7 +19,7 @@ def load_model(model_path: str) -> StarDist2D:
 
 def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str) -> StarDist2D:
     published_model = StarDist2D.from_pretrained('2D_versatile_he')
-    configuration = Config2D(n_channel_in=3, grid=(2,2), use_gpu=True, train_patch_size=[128, 128])
+    configuration = Config2D(n_channel_in=3, grid=(2,2), use_gpu=True, train_patch_size=[256, 256])
     model = StarDist2D(config=configuration, basedir=folder_to_write_new_model_folder, name=name_for_new_model)
     model.keras_model.set_weights(published_model.keras_model.get_weights())
     return model

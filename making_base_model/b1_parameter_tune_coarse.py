@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from my_utils import tile_processing as tp
+from tqdm import tqdm
 from my_utils import stardisting as sd
 # graph average mAP and average IoU (with stdev error bars) and see if high points agree
 
@@ -14,7 +15,7 @@ def read_test_data(root_dir: str, ext: str) -> list[list[str, list[str], list[np
         img_dir = os.path.join(dataset_dir, 'images')
         msk_dir = os.path.join(dataset_dir, 'masks')
         ts = tp.TileSetReader([img_dir, msk_dir], [ext, ext]).tile_sets
-        tst.append([dataset_name, ts[0], ts[1], ts[2]])
+        tst.append([dataset_name, ts[0], ts[1][0], ts[1][1]])
     return tst
 
 
@@ -34,36 +35,64 @@ def read_single_dataset_train_and_validate_data(root_dir: str, ext: str, dataset
     return trn, vld
 
 
-def run_experiment(trn: list, vld: list, tst: list, folder: str, epks: range, lrs: list, bss: list, fold: str, trn_set: str) \
-        -> (pd.DataFrame, pd.DataFrame):
+def run_experiment(trn: list, vld: list, tst: list,
+                   folder: str, fold: str, trn_set: str,
+                   epks: range, lrs: list, bss: list) -> (pd.DataFrame, pd.DataFrame):
     id_cols = ['Train Set', 'Train Fold', 'LR', 'BS', 'Epoch', 'Test Set']
-    df_ids = pd.DataFrame(columns=id_cols)
+    taus = list(np.arange(0.5, 0.95, 0.05).round(2))
+
+    # Make left id column dataframes
+    df_left_granular = pd.DataFrame(columns=id_cols)
+    df_left_summary = pd.DataFrame(columns=id_cols)
     for lr in lrs:
-        for bs in bss:
+        for bs in tqdm(bss):
             for epk in epks:
                 for dataset in tst:
                     for i in range(len(dataset[1])):
-                        # One line id dataframe
-                        df_id_1 = {'Train Set': [trn_set],
-                                   'Train Fold': [fold],
-                                   'LR': [lr],
-                                   'BS': [bs],
-                                   'Epoch': [epk],
-                                   'Test Set': [dataset]}
-                        df_id_1 = pd.DataFrame(data=df_id_1)
-                        
+                        # One line summary dataframe
+                        df_1 = pd.DataFrame({'Train Set': [trn_set],
+                                             'Train Fold': [fold],
+                                             'LR': [lr],
+                                             'BS': [bs],
+                                             'Epoch': [epk],
+                                             'Test Set': [dataset[0]]})
+                        df_left_summary = pd.concat([df_left_summary, df_1], axis=0, ignore_index=True)
+                        for tau in taus:
+                            # One line granular dataframe
+                            df_1 = pd.DataFrame({'Train Set': [trn_set],
+                                                 'Train Fold': [fold],
+                                                 'LR': [lr],
+                                                 'BS': [bs],
+                                                 'Epoch': [epk],
+                                                 'Test Set': [dataset[0]]})
+                            df_left_granular = pd.concat([df_left_granular, df_1], axis=0, ignore_index=True)
 
-
-
-
-
-
+    # Make left id column dataframes
+    score_columns_granular = ['Image', 'Tau', 'IoU', 'TP', 'FP', 'FN',
+               'Precision', 'Recall', 'Avg Precision', 'F1 Score', 'Seg Quality', 'Pan Quality']
+    score_columns_summary = ['Image', 'IoU', 'mAP']
+    df_right_granular = pd.DataFrame(columns=score_columns_granular)
+    df_right_summary = pd.DataFrame(columns=score_columns_summary)
+    for lr in lrs:
+        for bs in bss:
             model = sd.load_published_he_model(folder, 'hyperparameter_tuning')
-            model = sd.configure_model_for_training(model=model, epochs=5, learning_rate=lr, batch_size=bs)
+            model = sd.configure_model_for_training(model=model, epochs=10, learning_rate=lr, batch_size=bs)
+            for epk in epks:
+                for dataset in tst:
+                    for i, img in tqdm(enumerate(dataset[2])):
+                        img = tp.pseudo_normalize(img)
+                        prediction, details = model.predict_instances(img)
+                        scorer = tp.TileSetScorer(base_names=[dataset[1][i]],
+                                                  gt_set=[dataset[3][i]], pred_set=[prediction], taus=taus)
+                        df_right_granular = pd.concat([df_right_granular, scorer.df_results_granular],
+                                                      axis=0, ignore_index=True)
+                        df_right_summary = pd.concat([df_right_summary, scorer.df_results_summary],
+                                                     axis=0, ignore_index=True)
+                model = sd.normalize_train_and_threshold(model, trn[1][0], trn[1][1], vld[1][0], vld[1][1])
 
-
-                df_gran_right, df_sum_right = sd.predict_and_score_on_test_data(model, test)
-                model = sd.normalize_train_and_threshold(model, train[1], train[2], validate[1], validate[2])
+    # Append the left and right sides
+    df_gran = pd.concat([df_left_granular, df_right_granular], axis=1, ignore_index=False)
+    df_sum = pd.concat([df_left_summary, df_right_summary], axis=1, ignore_index=False)
     return df_gran, df_sum
 
 
@@ -77,8 +106,18 @@ if __name__ == "__main__":
     train, validate = read_single_dataset_train_and_validate_data(directory_20x_split, extension, dataset_name, fold_name)
 
     landing_folder_for_models = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\models"
-    epochs = range(0, 105, 5)
+    epochs = range(0, 110, 10)
     learning_rates = [1e-7, 1e-6, 1e-5]
     batch_sizes = [4, 8, 16]
 
-    df_granular, df_summary = run_experiment(landing_folder_for_models, epochs, learning_rates, batch_sizes, fold_name, dataset_name)
+    # epochs = range(0, 20, 10)
+    # learning_rates = [1e-7]
+    # batch_sizes = [4]
+
+    df_granular, df_summary = run_experiment(train, validate, test,
+                                             landing_folder_for_models, fold_name, dataset_name,
+                                             epochs, learning_rates, batch_sizes)
+
+    landing_folder_for_csv = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores"
+    df_granular.to_csv(os.path.join(landing_folder_for_csv, 'coarse_tune_granular.csv'), index=False)
+    df_summary.to_csv(os.path.join(landing_folder_for_csv, 'coarse_tune_summary.csv'), index=False)
