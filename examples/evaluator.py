@@ -15,4 +15,4 @@ scorer = tp.TileSetScorer(base_names=tile_sets[0], gt_set=tile_sets[1][0], pred_
 results_granular = scorer.df_results_granular
 results_summary = scorer.df_results_summary
 
-# Save dataframes to .csv or excel as needed
+# Save dataframes to .csv as needed
