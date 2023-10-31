@@ -4,7 +4,8 @@ import pandas as pd
 from my_utils import tile_processing as tp
 from tqdm import tqdm
 from my_utils import stardisting as sd
-# graph average mAP and average IoU (with stdev error bars) and see if high points agree
+import copy
+# graph average mAP and average IoU of just MoNuSeg test set (with stdev error bars) and see if high points agree
 
 
 def read_test_data(root_dir: str, ext: str) -> list[list[str, list[str], list[np.ndarray], list[np.ndarray]]]:
@@ -76,7 +77,10 @@ def run_experiment(trn: list, vld: list, tst: list,
     for lr in lrs:
         for bs in bss:
             model = sd.load_published_he_model(folder, 'hyperparameter_tuning')
-            model = sd.configure_model_for_training(model=model, epochs=10, learning_rate=lr, batch_size=bs)
+            original_thresholds = copy.copy({'prob': model.thresholds[0], 'nms': model.thresholds[1]})
+            model = sd.configure_model_for_training(model=model, epochs=epks[1]-epks[0], learning_rate=lr, batch_size=bs)
+            model.thresholds = original_thresholds
+            print('Thresholds overwritten back to published version:', model.thresholds)
             for epk in epks:
                 for dataset in tst:
                     for i, img in tqdm(enumerate(dataset[2])):
@@ -106,12 +110,12 @@ if __name__ == "__main__":
     train, validate = read_single_dataset_train_and_validate_data(directory_20x_split, extension, dataset_name, fold_name)
 
     landing_folder_for_models = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\models"
-    epochs = range(0, 110, 10)
-    learning_rates = [1e-7, 1e-6, 1e-5]
-    batch_sizes = [4, 8, 16]
+    epochs = range(0, 350, 50)
+    learning_rates = [5e-6, 6e-6, 7e-6]
+    batch_sizes = [4]
 
-    # epochs = range(0, 20, 10)
-    # learning_rates = [1e-7]
+    # epochs = range(0, 10, 10)
+    # learning_rates = [1e-6]
     # batch_sizes = [4]
 
     df_granular, df_summary = run_experiment(train, validate, test,
@@ -119,5 +123,5 @@ if __name__ == "__main__":
                                              epochs, learning_rates, batch_sizes)
 
     landing_folder_for_csv = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores"
-    df_granular.to_csv(os.path.join(landing_folder_for_csv, 'coarse_tune_granular.csv'), index=False)
-    df_summary.to_csv(os.path.join(landing_folder_for_csv, 'coarse_tune_summary.csv'), index=False)
+    df_granular.to_csv(os.path.join(landing_folder_for_csv, 'finer_tune_granular.csv'), index=False)
+    df_summary.to_csv(os.path.join(landing_folder_for_csv, 'finer_tune_summary.csv'), index=False)
