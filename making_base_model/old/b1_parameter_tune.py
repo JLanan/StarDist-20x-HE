@@ -110,8 +110,8 @@ if __name__ == "__main__":
     train, validate = read_single_dataset_train_and_validate_data(directory_20x_split, extension, dataset_name, fold_name)
 
     landing_folder_for_models = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\models"
-    epochs = range(0, 350, 50)
-    learning_rates = [5e-6, 6e-6, 7e-6]
+    epochs = range(0, 110, 10)
+    learning_rates = [1e-4, 1e-3, 1e-2]
     batch_sizes = [4]
 
     # epochs = range(0, 10, 10)
@@ -123,5 +123,5 @@ if __name__ == "__main__":
                                              epochs, learning_rates, batch_sizes)
 
     landing_folder_for_csv = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores"
-    df_granular.to_csv(os.path.join(landing_folder_for_csv, 'finer_tune_granular.csv'), index=False)
-    df_summary.to_csv(os.path.join(landing_folder_for_csv, 'finer_tune_summary.csv'), index=False)
+    df_granular.to_csv(os.path.join(landing_folder_for_csv, 'coarser_tune_granular.csv'), index=False)
+    df_summary.to_csv(os.path.join(landing_folder_for_csv, 'coarser_tune_summary.csv'), index=False)
