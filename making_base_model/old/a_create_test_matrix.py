@@ -5,7 +5,7 @@ from skimage.io import imread
 random.seed(7)
 
 
-def get_input_df(inputs: dict, min_passes: int) -> pd.DataFrame:
+def get_random_search_df(inputs: dict, min_passes: int) -> pd.DataFrame:
     total_models = min_passes * max([len(value) for value in inputs.values()])
     has_repeats = True
     while has_repeats:
@@ -32,7 +32,8 @@ def get_input_df(inputs: dict, min_passes: int) -> pd.DataFrame:
     return df
 
 
-def read_all_20x_published_data(dir_20x: str) -> dict:
+def read_all_20x_published_data() -> dict[dict]:
+    dir_20x = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x"
     dataset_names = []
     for folder in os.listdir(dir_20x):
         folder_path = os.path.join(dir_20x, folder)

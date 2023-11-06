@@ -20,21 +20,27 @@ def load_model(model_path: str) -> StarDist2D:
 
 def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str) -> StarDist2D:
     published_model = StarDist2D.from_pretrained('2D_versatile_he')
-    original_thresholds = copy.copy({'prob': published_model.thresholds[0], 'nms': published_model.thresholds[1]})
-    configuration = Config2D(n_channel_in=3, grid=(2,2), use_gpu=True, train_patch_size=[256, 256])
+    configuration = Config2D(n_channel_in=3, grid=(2, 2))
     model = StarDist2D(config=configuration, basedir=folder_to_write_new_model_folder, name=name_for_new_model)
     model.keras_model.set_weights(published_model.keras_model.get_weights())
-    model.thresholds = original_thresholds
+    model.thresholds = {'prob': published_model.thresholds[0], 'nms': published_model.thresholds[1]}
+    print('\nIgnore that, thresholds are:', model.thresholds)
     return model
 
 
-def configure_model_for_training(model: StarDist2D,
-                                 epochs: int = 25, learning_rate: float = 1e-6,
-                                 batch_size: int = 4, patch_size: list[int,int] = [256, 256]) -> StarDist2D:
+def load_random_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str, n_rays: int = 32) \
+        -> StarDist2D:
+    configuration = Config2D(n_channel_in=3, n_rays=n_rays)
+    model = StarDist2D(config=configuration, basedir=folder_to_write_new_model_folder, name=name_for_new_model)
+    return model
+
+
+def configure_model_for_training(model: StarDist2D, use_gpu: bool = True,
+                                 epochs: int = 25, learning_rate: float = 1e-6, batch_size: int = 4) -> StarDist2D:
     model.config.train_epochs = epochs
     model.config.train_learning_rate = learning_rate
     model.config.train_batch_size = batch_size
-    model.config.train_patch_size = patch_size
+    model.config.use_gpu = use_gpu
     return model
 
 

@@ -192,24 +192,30 @@ class ScoringSubroutine:
 
 class TilePairAugmenter:
     def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray, random_state: int,
-                 hue: bool = True, blur: bool = True, scale: bool = True,
-                 rotate: bool = True, rotate90: bool = True, flip: bool = True):
-        original_shape = mask_gray.shape
+                 intensity: bool = True, hue: bool = True, blur: bool = True,
+                 rotate90: bool = True, flip: bool = True):
         image_rgb = np.copy(image_rgb)
         mask_gray = np.copy(mask_gray)
         np.random.seed(random_state)
+        if intensity:
+            self.image_rgb = self.intensity_image(image_rgb)
         if hue:
             self.image_rgb = self.hue_image(image_rgb)
         if blur:
             self.image_rgb = self.blur_image(image_rgb)
-        if scale:
-            self.image_rgb, self.mask_gray = self.scale_pair(image_rgb, mask_gray, original_shape)
-        if rotate:
-            self.image_rgb, self.mask_gray = self.rotate_pair(image_rgb, mask_gray)
         if rotate90:
             self.image_rgb, self.mask_gray = self.rotate90_pair(image_rgb, mask_gray)
         if flip:
             self.image_rgb, self.mask_gray = self.flip_pair(image_rgb, mask_gray)
+
+    @staticmethod
+    def intensity_image(img: np.ndarray):
+        mean, std = 1, 0.05
+        factor = np.random.normal(mean, std)
+        img = img.astype(np.float32)
+        img[:, :, :] = img[:, :, :] * factor
+        img = np.clip(img, 0, 255)
+        return img.astype(np.uint8)
 
     @staticmethod
     def hue_image(img: np.ndarray):
@@ -230,41 +236,6 @@ class TilePairAugmenter:
         sigmas = np.arange(0, 1.1, 0.1)
         sigma = sigmas[np.random.randint(0, len(sigmas))]
         return ndimage.gaussian_filter(img, sigma=(sigma, sigma, 0))
-
-    @staticmethod
-    def scale_pair(img: np.ndarray, msk: np.ndarray, original_shape: tuple):
-        # Random rescale
-        lows, highs = np.arange(0.9, 0.96, 0.01), np.arange(1.01, 1.06, 0.01)
-        scales = np.append(lows, highs)
-        scale = scales[np.random.randint(0, len(scales))]
-        img = ndimage.zoom(img, (scale, scale, 1), order=1)  # 1 bi-linear neighbor
-        msk = ndimage.zoom(msk, (scale, scale), order=0)  # 0 nearest neighbor
-
-        # Size correction, crop if upscaled, black pad if downscaled
-        if scale > 1:
-            dx, dy = original_shape
-            x0, y0 = 0, 0
-            x3, y3 = msk.shape
-            x1, y1 = np.random.randint(x0, x3 - dx), np.random.randint(y0, y3 - dy)
-            x2, y2, = x1 + dx, y1 + dy
-            img = img[x1: x2, y1: y2, :]
-            msk = msk[x1: x2, y1: y2]
-        else:
-            target_size = original_shape
-            pad_x = (target_size[0] - msk.shape[0]) // 2
-            pad_y = (target_size[1] - msk.shape[1]) // 2
-            img = np.pad(img, ((pad_x, pad_x), (pad_y, pad_y), (0, 0)))
-            msk = np.pad(msk, ((pad_x, pad_x), (pad_y, pad_y)))
-        return img, msk
-
-    @staticmethod
-    def rotate_pair(img: np.ndarray, msk: np.ndarray):
-        # Random rotation with black padding
-        angles = np.arange(10, 360, 10)
-        angle = angles[np.random.randint(0, len(angles))]
-        img = ndimage.rotate(img, angle, reshape=False, order=1)
-        msk = ndimage.rotate(msk, angle, reshape=False, order=0)
-        return img, msk
 
     @staticmethod
     def rotate90_pair(img: np.ndarray, msk: np.ndarray):
