@@ -147,19 +147,25 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
     model = sd.configure_model_for_training(model=model, use_gpu=True, epochs=epochs, learning_rate=lr, batch_size=bs)
 
     if intensity or hue or blur or rot90 or flip:
+        aug_images, aug_masks = [], []
         for i, img in enumerate(trn['Images']):
             msk = trn['Masks'][i]
             augmenter = tp.TilePairAugmenter(img, msk, random_state=i,
                                              intensity=intensity, hue=hue, blur=blur, rotate90=rot90, flip=flip)
-            trn['Images'].append(augmenter.image_rgb)
-            trn['Masks'].append(augmenter.mask_gray)
-    if aug_twice:
-        for i, img in enumerate(trn['Images']):
-            msk = trn['Masks'][i]
-            augmenter = tp.TilePairAugmenter(img, msk, random_state=i+random_state,
-                                             intensity=intensity, hue=hue, blur=blur, rotate90=rot90, flip=flip)
-            trn['Images'].append(augmenter.image_rgb)
-            trn['Masks'].append(augmenter.mask_gray)
+            aug_images.append(augmenter.image_rgb)
+            aug_masks.append(augmenter.mask_gray)
+        if aug_twice:
+            aug_images_2, aug_masks_2 = [], []
+            for i, img in enumerate(trn['Images']):
+                msk = trn['Masks'][i]
+                augmenter = tp.TilePairAugmenter(img, msk, random_state=i+random_state,
+                                                 intensity=intensity, hue=hue, blur=blur, rotate90=rot90, flip=flip)
+                aug_images_2.append(augmenter.image_rgb)
+                aug_masks_2.append(augmenter.mask_gray)
+            [trn['Images'].append(img) for img in aug_images_2]
+            [trn['Masks'].append(msk) for msk in aug_masks_2]
+        [trn['Images'].append(img) for img in aug_images]
+        [trn['Masks'].append(msk) for msk in aug_masks]
 
     model = sd.normalize_train_and_threshold(model=model, training_images=trn['Images'], training_masks=trn['Masks'],
                                              validation_images=vld['Images'], validation_masks=vld['Masks'])

@@ -194,8 +194,8 @@ class TilePairAugmenter:
     def __init__(self, image_rgb: np.ndarray, mask_gray: np.ndarray, random_state: int,
                  intensity: bool = True, hue: bool = True, blur: bool = True,
                  rotate90: bool = True, flip: bool = True):
-        image_rgb = np.copy(image_rgb)
-        mask_gray = np.copy(mask_gray)
+        self.image_rgb = np.copy(image_rgb)
+        self.mask_gray = np.copy(mask_gray)
         np.random.seed(random_state)
         if intensity:
             self.image_rgb = self.intensity_image(image_rgb)

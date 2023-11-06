@@ -1,19 +1,18 @@
 from my_utils import tile_processing as tp
 
 
-img_folder_in = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\train\CoNSeP\images"
-msk_folder_in = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\train\CoNSeP\masks"
+img_folder_in = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\fold_1\train\CoNSeP\images"
+msk_folder_in = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\fold_1\train\CoNSeP\masks"
 
-img_aug_folder_out = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\aug_visual_checking\CoNSeP\images"
-msk_aug_folder_out = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\aug_visual_checking\CoNSeP\masks"
+img_aug_folder_out = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\aug checks\CoNSeP\images"
+msk_aug_folder_out = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x split\aug checks\CoNSeP\masks"
 
-hue = True
-blur = True
-scale = False
-rotate = False
-rotate90 = True
-flip = True
-desired_extension = '.TIFF'
+intensity = True
+hue = False
+blur = False
+rot90 = False
+flip = False
+desired_extension = '.tif'
 
 ####################################################################################################################
 # END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOBS #### END KNOB
@@ -28,7 +27,7 @@ for i, basename in enumerate(tile_sets[0]):
     msk = tile_sets[1][1][i]
 
     augmentation = tp.TilePairAugmenter(img, msk, random_state=i,
-                                        hue=hue, blur=blur, scale=scale, rotate=rotate, rotate90=rotate90, flip=flip)
+                                        intensity=intensity, hue=hue, blur=blur, rotate90=rot90, flip=flip)
     img_aug = augmentation.image_rgb
     msk_aug = augmentation.mask_gray
 
