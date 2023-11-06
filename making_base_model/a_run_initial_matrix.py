@@ -73,7 +73,7 @@ def split_all_data(splits: list, all_data: dict) -> dict:
 
 def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> None:
 
-    model_name, starting_model, use_consep, use_cryonuseg, use_monuseg, use_tnbc, splits, epochs, lr, bs, n_rays, \
+    model_name, starting_model, use_consep, use_cryonuseg, use_monuseg, use_tnbc, splits, epochs, lr, bs, grid, n_rays,\
     rot90, flip, intensity, hue, blur, aug_twice = tuple([None for _ in range(len(scenario)+1)])
 
     for i, val in scenario.items():
@@ -97,6 +97,8 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
             lr = val
         elif i == 'Batch Size':
             bs = val
+        elif i == 'Grid':
+            grid = val
         elif i == 'Star Rays':
             n_rays = val
         elif i == 'Aug Rot90Flip':
@@ -114,7 +116,7 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
     if starting_model == 'StarDist HE Pretrained':
         model = sd.load_published_he_model(models_folder, model_name)
     elif starting_model == 'Random Initialization':
-        model = sd.load_random_he_model(models_folder, model_name, n_rays=n_rays)
+        model = sd.load_random_he_model(models_folder, model_name, n_rays=n_rays, grid=grid)
     else:
         model = sd.load_model(os.path.join(models_folder, starting_model))
 

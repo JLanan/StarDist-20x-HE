@@ -2,7 +2,6 @@ from my_utils.tile_processing import pseudo_normalize
 import json
 import numpy as np
 from stardist.models import StarDist2D, Config2D
-import copy
 
 
 def load_model(model_path: str) -> StarDist2D:
@@ -28,9 +27,9 @@ def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_
     return model
 
 
-def load_random_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str, n_rays: int = 32) \
-        -> StarDist2D:
-    configuration = Config2D(n_channel_in=3, n_rays=n_rays)
+def load_random_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str,
+                         n_rays: int = 32, grid: tuple = (2, 2)) -> StarDist2D:
+    configuration = Config2D(n_channel_in=3, grid=grid, n_rays=n_rays)
     model = StarDist2D(config=configuration, basedir=folder_to_write_new_model_folder, name=name_for_new_model)
     return model
 
