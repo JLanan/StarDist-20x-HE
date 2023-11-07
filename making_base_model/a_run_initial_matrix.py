@@ -98,7 +98,7 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
         elif i == 'Batch Size':
             bs = val
         elif i == 'Grid':
-            grid = val
+            grid = eval(val)
         elif i == 'Star Rays':
             n_rays = val
         elif i == 'Aug Rot90Flip':
