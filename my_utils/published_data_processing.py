@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import random
 from skimage.io import imread, imsave
 from skimage import draw
 from skimage.transform import rescale
@@ -197,3 +198,64 @@ def scale_40x_to_20x(root: str, dataset_name: str) -> None:
         imsave(img_path, dataset['Images'][i])
         imsave(msk_path, dataset['Masks'][i])
     return None
+
+
+def read_all_20x_published_data(dir_20x: str) -> dict:
+    dataset_names = []
+    for folder in os.listdir(dir_20x):
+        folder_path = os.path.join(dir_20x, folder)
+        if os.path.isdir(folder_path):
+            dataset_names.append(folder)
+    data = {}
+    for dataset_name in dataset_names:
+        data_dir = os.path.join(dir_20x, dataset_name)
+        img_dir = os.path.join(data_dir, 'images')
+        msk_dir = os.path.join(data_dir, 'masks')
+        dataset = {'Tile Names': [], 'Images': [], 'Masks': []}
+        for tile in os.listdir(img_dir):
+            if tile.endswith('.tif'):
+                tile_name = tile[:-4]
+                img = imread(os.path.join(img_dir, tile))
+                msk = imread(os.path.join(msk_dir, tile))
+                dataset['Tile Names'].append(tile_name)
+                dataset['Images'].append(img)
+                dataset['Masks'].append(msk)
+        data[dataset_name] = dataset
+    return data
+
+
+def split_dataset(dataset: dict, splits: list, random_state: int) -> (dict, dict, dict):
+    trn = {'Tile Names': [], 'Images': [], 'Masks': []}
+    vld = {'Tile Names': [], 'Images': [], 'Masks': []}
+    tst = {'Tile Names': [], 'Images': [], 'Masks': []}
+    length = len(dataset['Tile Names'])
+    indexes = [i for i in range(length)]
+    random.seed(random_state)
+    random.shuffle(indexes)
+    trn_ids = indexes[:round(length * splits[0] / 100)]
+    vld_ids = indexes[round(length * splits[0] / 100): round(length * (splits[0] + splits[1]) / 100)]
+    for index in indexes:
+        if index in trn_ids:
+            trn['Tile Names'].append(dataset['Tile Names'][index])
+            trn['Images'].append(dataset['Images'][index])
+            trn['Masks'].append(dataset['Masks'][index])
+        elif index in vld_ids:
+            vld['Tile Names'].append(dataset['Tile Names'][index])
+            vld['Images'].append(dataset['Images'][index])
+            vld['Masks'].append(dataset['Masks'][index])
+        else:
+            tst['Tile Names'].append(dataset['Tile Names'][index])
+            tst['Images'].append(dataset['Images'][index])
+            tst['Masks'].append(dataset['Masks'][index])
+    return trn, vld, tst
+
+
+def split_all_data(splits: list, all_data: dict, random_state: int) -> dict:
+    trn_vld_tst = {'Train': {}, 'Validate': {}, 'Test': {}}
+    for dataset_name in list(all_data.keys()):
+        dataset = all_data[dataset_name]
+        trn, vld, tst = split_dataset(dataset, splits, random_state)
+        trn_vld_tst['Train'][dataset_name] = trn
+        trn_vld_tst['Validate'][dataset_name] = vld
+        trn_vld_tst['Test'][dataset_name] = tst
+    return trn_vld_tst

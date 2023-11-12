@@ -1,74 +1,12 @@
 import os
-from skimage.io import imread
 import pandas as pd
-import random
 from my_utils import stardisting as sd
 from my_utils import tile_processing as tp
+from my_utils import published_data_processing as pub
 random_state = 7
 path_to_input_matrix = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores\Input Matrix 1.xlsx"
 path_to_models = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\models"
 path_to_20x_data = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x"
-
-
-def read_all_20x_published_data(dir_20x: str) -> dict:
-    dataset_names = []
-    for folder in os.listdir(dir_20x):
-        folder_path = os.path.join(dir_20x, folder)
-        if os.path.isdir(folder_path):
-            dataset_names.append(folder)
-    data = {}
-    for dataset_name in dataset_names:
-        data_dir = os.path.join(dir_20x, dataset_name)
-        img_dir = os.path.join(data_dir, 'images')
-        msk_dir = os.path.join(data_dir, 'masks')
-        dataset = {'Tile Names': [], 'Images': [], 'Masks': []}
-        for tile in os.listdir(img_dir):
-            if tile.endswith('.tif'):
-                tile_name = tile[:-4]
-                img = imread(os.path.join(img_dir, tile))
-                msk = imread(os.path.join(msk_dir, tile))
-                dataset['Tile Names'].append(tile_name)
-                dataset['Images'].append(img)
-                dataset['Masks'].append(msk)
-        data[dataset_name] = dataset
-    return data
-
-
-def split_dataset(dataset: dict, splits: list) -> (dict, dict, dict):
-    trn = {'Tile Names': [], 'Images': [], 'Masks': []}
-    vld = {'Tile Names': [], 'Images': [], 'Masks': []}
-    tst = {'Tile Names': [], 'Images': [], 'Masks': []}
-    length = len(dataset['Tile Names'])
-    indexes = [i for i in range(length)]
-    random.seed(random_state)
-    random.shuffle(indexes)
-    trn_ids = indexes[:round(length * splits[0] / 100)]
-    vld_ids = indexes[round(length * splits[0] / 100): round(length * (splits[0] + splits[1]) / 100)]
-    for index in indexes:
-        if index in trn_ids:
-            trn['Tile Names'].append(dataset['Tile Names'][index])
-            trn['Images'].append(dataset['Images'][index])
-            trn['Masks'].append(dataset['Masks'][index])
-        elif index in vld_ids:
-            vld['Tile Names'].append(dataset['Tile Names'][index])
-            vld['Images'].append(dataset['Images'][index])
-            vld['Masks'].append(dataset['Masks'][index])
-        else:
-            tst['Tile Names'].append(dataset['Tile Names'][index])
-            tst['Images'].append(dataset['Images'][index])
-            tst['Masks'].append(dataset['Masks'][index])
-    return trn, vld, tst
-
-
-def split_all_data(splits: list, all_data: dict) -> dict:
-    trn_vld_tst = {'Train': {}, 'Validate': {}, 'Test': {}}
-    for dataset_name in list(all_data.keys()):
-        dataset = all_data[dataset_name]
-        trn, vld, tst = split_dataset(dataset, splits)
-        trn_vld_tst['Train'][dataset_name] = trn
-        trn_vld_tst['Validate'][dataset_name] = vld
-        trn_vld_tst['Test'][dataset_name] = tst
-    return trn_vld_tst
 
 
 def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> None:
@@ -120,7 +58,7 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
     else:
         model = sd.load_model(os.path.join(models_folder, starting_model))
 
-    trn_vld_tst = split_all_data(splits, all_data)
+    trn_vld_tst = pub.split_all_data(splits, all_data, random_state)
     trn = {'Images': [], 'Masks': []}
     vld = {'Images': [], 'Masks': []}
     if use_consep:
@@ -174,7 +112,7 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
 
 if __name__ == "__main__":
     input_df = pd.read_excel(path_to_input_matrix)
-    full_dataset = read_all_20x_published_data(path_to_20x_data)
+    full_dataset = pub.read_all_20x_published_data(path_to_20x_data)
 
     for _, row in input_df.iterrows():
         run_scenario(row, full_dataset, path_to_models)
