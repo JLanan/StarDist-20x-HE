@@ -3,6 +3,7 @@ import pandas as pd
 from skimage.io import imread
 from my_utils import stardisting as sd
 from my_utils import published_data_processing as pub
+from my_utils import tile_processing as tp
 random_state = 7
 path_to_input_matrix = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores\Input Matrix 1.xlsx"
 path_for_output_matrix = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores\Output Matrix 1.csv"
@@ -43,11 +44,16 @@ def score_scenario(scenario: pd.Series, all_data: dict, models_folder: str,
 
     # Function to run scorer and create series_summary of summary_df. Do for all datasets
     # We don't care about tile name. Just dataset name
+    scores = {}
     score_columns = ['CoNSeP', 'CryoNuSeg', 'MoNuSeg', 'TNBC', 'Avg Published', 'Skin 1', 'Skin 2', 'Pancreas', 'Fallopian Tube', 'Avg JHU', 'Avg All']
+
+    # One line df
+    scorer = tp.TileSetScorer(base_names=all_data['CoNSeP']['Names'], gt_set=tile_sets[1][0], pred_set=tile_sets[1][1], taus=taus)
+
+
     # Average columns should use proper weightings. Each dataset gets its weighting set as len(dataset1)/(len(dataset1) + len(dataset2) + ...)
 
-
-    # series =
+    
     return None
 
 
@@ -59,5 +65,8 @@ if __name__ == "__main__":
     pancreas_ = read_manually_annotated_set(path_to_pancreas, extensions)
     fallopian_tube_ = read_manually_annotated_set(path_to_fallopian_tube, extensions)
 
+
     for _, row in input_df.iterrows():
         scores_series = score_scenario(row, full_dataset, path_to_models, skin1_, skin2_, pancreas_, fallopian_tube_)
+
+    full_df = pd.concat([input_df, output_df], )
