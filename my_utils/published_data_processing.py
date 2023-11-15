@@ -211,13 +211,13 @@ def read_all_20x_published_data(dir_20x: str) -> dict:
         data_dir = os.path.join(dir_20x, dataset_name)
         img_dir = os.path.join(data_dir, 'images')
         msk_dir = os.path.join(data_dir, 'masks')
-        dataset = {'Tile Names': [], 'Images': [], 'Masks': []}
+        dataset = {'Names': [], 'Images': [], 'Masks': []}
         for tile in os.listdir(img_dir):
             if tile.endswith('.tif'):
                 tile_name = tile[:-4]
                 img = imread(os.path.join(img_dir, tile))
                 msk = imread(os.path.join(msk_dir, tile))
-                dataset['Tile Names'].append(tile_name)
+                dataset['Names'].append(tile_name)
                 dataset['Images'].append(img)
                 dataset['Masks'].append(msk)
         data[dataset_name] = dataset
@@ -225,10 +225,10 @@ def read_all_20x_published_data(dir_20x: str) -> dict:
 
 
 def split_dataset(dataset: dict, splits: list, random_state: int) -> (dict, dict, dict):
-    trn = {'Tile Names': [], 'Images': [], 'Masks': []}
-    vld = {'Tile Names': [], 'Images': [], 'Masks': []}
-    tst = {'Tile Names': [], 'Images': [], 'Masks': []}
-    length = len(dataset['Tile Names'])
+    trn = {'Names': [], 'Images': [], 'Masks': []}
+    vld = {'Names': [], 'Images': [], 'Masks': []}
+    tst = {'Names': [], 'Images': [], 'Masks': []}
+    length = len(dataset['Names'])
     indexes = [i for i in range(length)]
     random.seed(random_state)
     random.shuffle(indexes)
@@ -236,15 +236,15 @@ def split_dataset(dataset: dict, splits: list, random_state: int) -> (dict, dict
     vld_ids = indexes[round(length * splits[0] / 100): round(length * (splits[0] + splits[1]) / 100)]
     for index in indexes:
         if index in trn_ids:
-            trn['Tile Names'].append(dataset['Tile Names'][index])
+            trn['Names'].append(dataset['Names'][index])
             trn['Images'].append(dataset['Images'][index])
             trn['Masks'].append(dataset['Masks'][index])
         elif index in vld_ids:
-            vld['Tile Names'].append(dataset['Tile Names'][index])
+            vld['Names'].append(dataset['Names'][index])
             vld['Images'].append(dataset['Images'][index])
             vld['Masks'].append(dataset['Masks'][index])
         else:
-            tst['Tile Names'].append(dataset['Tile Names'][index])
+            tst['Names'].append(dataset['Names'][index])
             tst['Images'].append(dataset['Images'][index])
             tst['Masks'].append(dataset['Masks'][index])
     return trn, vld, tst
