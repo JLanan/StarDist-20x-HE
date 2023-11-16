@@ -4,7 +4,7 @@ from my_utils import stardisting as sd
 from my_utils import tile_processing as tp
 from my_utils import published_data_processing as pub
 random_state = 7
-path_to_input_matrix = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores\Input Matrix 1.xlsx"
+path_to_input_matrix = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\scores\Model Matrix Inputs.xlsx"
 path_to_models = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Training\models"
 path_to_20x_data = r"\\babyserverdw5\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\20x"
 
@@ -56,7 +56,8 @@ def run_scenario(scenario: pd.Series, all_data: dict, models_folder: str) -> Non
     elif starting_model == 'Random Initialization':
         model = sd.load_random_he_model(models_folder, model_name, n_rays=n_rays, grid=grid)
     else:
-        model = sd.load_model(os.path.join(models_folder, starting_model))
+        model = sd.load_model(model_path=os.path.join(models_folder, starting_model),
+                              new_model_path_for_retraining=os.path.join(models_folder, model_name))
 
     trn_vld_tst = pub.split_all_data(splits, all_data, random_state)
     trn = {'Images': [], 'Masks': []}

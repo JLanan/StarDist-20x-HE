@@ -1,19 +1,30 @@
 from my_utils.tile_processing import pseudo_normalize
 import json
+import os
 import numpy as np
 from stardist.models import StarDist2D, Config2D
 
 
-def load_model(model_path: str) -> StarDist2D:
+def load_model(model_path: str, new_model_path_for_retraining: str = False) -> StarDist2D:
     # Load StarDist model weights, configurations, and thresholds
     with open(model_path + '\\config.json', 'r') as f:
         config = json.load(f)
     with open(model_path + '\\thresholds.json', 'r') as f:
         thresh = json.load(f)
-    model = StarDist2D(config=Config2D(**config), basedir=model_path, name='offshoot_model')
+    if new_model_path_for_retraining:
+        model = StarDist2D(config=Config2D(**config), basedir=os.path.dirname(model_path),
+                           name=os.path.basename(new_model_path_for_retraining))
+    else:
+        model = StarDist2D(config=Config2D(**config), basedir=os.path.dirname(model_path),
+                           name=os.path.basename(model_path))
     model.thresholds = thresh
     print('Overriding defaults:', model.thresholds, '\n')
     model.load_weights(model_path + '\\weights_best.h5')
+    return model
+
+
+def load_model_as_new_model_for_further_training(old_model_path: str, new_model_path: str) -> StarDist2D:
+
     return model
 
 
