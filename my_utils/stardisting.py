@@ -23,11 +23,6 @@ def load_model(model_path: str, new_model_path_for_retraining: str = False) -> S
     return model
 
 
-def load_model_as_new_model_for_further_training(old_model_path: str, new_model_path: str) -> StarDist2D:
-
-    return model
-
-
 def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str) -> StarDist2D:
     published_model = StarDist2D.from_pretrained('2D_versatile_he')
     configuration = Config2D(n_channel_in=3, grid=(2, 2))
