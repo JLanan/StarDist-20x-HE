@@ -210,7 +210,7 @@ class TilePairAugmenter:
 
     @staticmethod
     def intensity_image(img: np.ndarray):
-        mean, std = 1, 0.05
+        mean, std = 1, 0.02
         factor = np.random.normal(mean, std)
         img = img.astype(np.float32)
         img[:, :, :] = img[:, :, :] * factor
@@ -233,7 +233,7 @@ class TilePairAugmenter:
     @staticmethod
     def blur_image(img: np.ndarray):
         # Random Gaussian blur, image only
-        sigmas = np.arange(0, 1.1, 0.1)
+        sigmas = np.arange(0.1, 1.0, 0.1)
         sigma = sigmas[np.random.randint(0, len(sigmas))]
         return ndimage.gaussian_filter(img, sigma=(sigma, sigma, 0))
 
@@ -247,7 +247,7 @@ class TilePairAugmenter:
     @staticmethod
     def flip_pair(img: np.ndarray, msk: np.ndarray):
         # Random mirror flip
-        flip_id = np.random.randint(0, 3)
+        flip_id = np.random.randint(1, 3)
         if flip_id:  # 0 none, 1 horizontal, 2 vertical
             img = np.flip(img, axis=flip_id-1)
             msk = np.flip(msk, axis=flip_id-1)
