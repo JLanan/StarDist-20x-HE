@@ -5,7 +5,7 @@ import numpy as np
 from stardist.models import StarDist2D, Config2D
 
 
-def load_model(model_path: str, new_model_path_for_retraining: str = False) -> StarDist2D:
+def load_model(model_path: str, new_model_path_for_retraining: str = False, from_last_weights = False) -> StarDist2D:
     # Load StarDist model weights, configurations, and thresholds
     with open(model_path + '\\config.json', 'r') as f:
         config = json.load(f)
@@ -19,7 +19,10 @@ def load_model(model_path: str, new_model_path_for_retraining: str = False) -> S
                            name=os.path.basename(model_path))
     model.thresholds = thresh
     print('Overriding defaults:', model.thresholds, '\n')
-    model.load_weights(model_path + '\\weights_best.h5')
+    if from_last_weights:
+        model.load_weights(model_path + '\\weights_last.h5')
+    else:
+        model.load_weights(model_path + '\\weights_best.h5')
     return model
 
 
