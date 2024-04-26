@@ -288,6 +288,21 @@ class TileOverLayer:
         return None
 
 
+def remove_margin_objects(label: np.ndarray, percent_margin: float = 7.5) -> np.ndarray:
+    margin = int(percent_margin / 100 * min(label.shape))
+    margin_mask = np.zeros_like(label, dtype=bool)
+    margin_mask[:margin, :] = True
+    margin_mask[-margin:, :] = True
+    margin_mask[:, :margin] = True
+    margin_mask[:, -margin:] = True
+    margin_mask[margin:-margin, margin:-margin] = False
+    objects_within_margin = np.unique(label[margin_mask])
+    filtered_label = label.copy()
+    for obj_id in objects_within_margin:
+        if obj_id != 0:  # Skip background
+            filtered_label[filtered_label == obj_id] = 0
+    return filtered_label
+
 def pseudo_normalize(image: np.ndarray) -> np.ndarray:
     # Poor man's normalization
     return image / 255
