@@ -1,9 +1,11 @@
 from my_utils import stardisting as sd
 from my_utils import tile_processing as tp
+
 import os
 import zarr
 import numpy as np
 from tqdm import tqdm
+from skimage.transform import rescale
 OPENSLIDE_PATH = r"C:\Users\labuser\Documents\GitHub\StarDist-20x-HE\openslide-win64-20230414\bin"
 with os.add_dll_directory(OPENSLIDE_PATH):
     from openslide import OpenSlide
@@ -12,40 +14,66 @@ with os.add_dll_directory(OPENSLIDE_PATH):
 
 class WSISegmenter:
     def __init__(self, wsi_path: str, model_path: str, output_folder: str, detect_20x: bool = False,
-                 level: int = 0, tile_size: int = 2048, overlap: int = 128, n_rays: int = 32):
+                 level: int = 0, scale_factor: float = False, normalize_percentiles: tuple = False,
+                 tile_size: int = 2048, overlap: int = 128):
         self.wsi_path = wsi_path
         self.wsi = OpenSlide(wsi_path)
         self.dims = self.wsi.level_dimensions[level][::-1]
         self.output_folder = output_folder
-        self.model = sd.load_model(model_path)
-        self.model.config.n_rays = n_rays
+        if '2D_versatile_he' in model_path:
+            self.model = sd.load_published_he_model(
+                folder_to_write_new_model_folder=model_path.rsplit('2D_versatile_he')[0],
+                name_for_new_model='2D_versatile_he')
+        else:
+            self.model = sd.load_model(model_path)
+        self.n_rays = self.model.config.n_rays
         if detect_20x:
             self.level = self.find_wsi_20x_level()
         else:
             self.level = level
+        print(f'Using level {self.level}')
+        self.scale_factor = scale_factor
+        self.normalize_percentiles = normalize_percentiles
+        if self.normalize_percentiles:
+            self.pxl_low, self.pxl_high = self.get_norm_params()
+            print('Normalization Pixel Low/High:', self.pxl_low, self.pxl_high)
         self.tile_size = tile_size
         self.overlap = overlap
-        self.n_rays = n_rays
         self.tiles = self.generate_deepzoom_tiles()
         self.zarrs = self.init_zarrs_for_wsi_prediction()
         self.zarrs = self.seg_subroutine()
         for i, name in enumerate(['label.zarr', 'centroids.zarr', 'vertices.zarr']):
             zarr.save(os.path.join(output_folder, name), self.zarrs[i])
+        self.wsi.close()
 
     def find_wsi_20x_level(self) -> int:
         native_mag = int(self.wsi.properties['openslide.objective-power'])
+        print(f'Native magnification is {native_mag}x')
         if native_mag == 20:
+            print('Using native magnification')
             return 0
         else:
             for lvl, downsample in enumerate(self.wsi.level_downsamples):
                 down_mag = native_mag / downsample
                 if down_mag == 20:
+                    print(f'20x downsample detected as downsample level {lvl}')
                     return lvl
             else:
                 print('Current slide:', self.wsi_path.rsplit('\\', 1)[1])
                 lvl = int(input("Native magnification is not 20x, nor is there a 20x downsample for this slide.\n"
                                 "Please manually specify level, 0 being native: -->"))
                 return lvl
+
+    def get_norm_params(self):
+        # Extract from smallest downsample in the pyramid
+        smallest_lvl = len(self.wsi.level_dimensions) - 1
+        width, height = self.wsi.level_dimensions[smallest_lvl]
+        pixel_data = self.wsi.read_region((0, 0), smallest_lvl, (width, height))
+        pixel_data = pixel_data.convert("RGB")
+        pixel_array = np.array(pixel_data)
+        pxl_low = np.percentile(pixel_array, self.normalize_percentiles[0])
+        pxl_high = np.percentile(pixel_array, self.normalize_percentiles[1])
+        return pxl_low, pxl_high
 
     def generate_deepzoom_tiles(self) -> DeepZoomGenerator:
         # Get lazy loading objects for Whole Slide Image and corresponding Tiles
@@ -79,10 +107,18 @@ class WSISegmenter:
 
                 # Read RGBA PIL object tile into memory, convert to RGB numpy array, and normalize
                 tile = self.tiles.get_tile(level=self.tiles.level_count - self.level - 1, address=(x, y))
-                tile = tp.pseudo_normalize(np.asarray(tile.convert('RGB')))
+                if not self.normalize_percentiles:
+                    tile = tp.pseudo_normalize(np.asarray(tile.convert('RGB')))
+                else:
+                    tile = (np.asarray(tile.convert('RGB')) - self.pxl_low) / (self.pxl_high - self.pxl_low)
 
-                # Perform the prediction, override thresholds. Delete object probability outputs, no common usage.
-                label, results = self.model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
+                # Perform the prediction, override thresholds. Rescale if specified. Toss the Probabilities.
+                if self.scale_factor:
+                    tile = rescale(tile, self.scale_factor, order=1, channel_axis=2)
+                    label, results = self.model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
+                    label = rescale(label, 1 / self.scale_factor, order=0, anti_aliasing=False)
+                else:
+                    label, results = self.model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
                 del results['prob']
 
                 # Erase edge objects and shift the indexing accordingly.

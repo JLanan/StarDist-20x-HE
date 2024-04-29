@@ -4,7 +4,6 @@ import os
 import numpy as np
 from stardist.models import StarDist2D, Config2D
 
-
 def load_model(model_path: str, new_model_path_for_retraining: str = False, from_last_weights = False) -> StarDist2D:
     # Load StarDist model weights, configurations, and thresholds
     with open(model_path + '\\config.json', 'r') as f:
@@ -25,7 +24,6 @@ def load_model(model_path: str, new_model_path_for_retraining: str = False, from
         model.load_weights(model_path + '\\weights_best.h5')
     return model
 
-
 def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str) -> StarDist2D:
     published_model = StarDist2D.from_pretrained('2D_versatile_he')
     configuration = Config2D(n_channel_in=3, grid=(2, 2))
@@ -35,13 +33,11 @@ def load_published_he_model(folder_to_write_new_model_folder: str, name_for_new_
     print('\nIgnore that, thresholds are:', model.thresholds)
     return model
 
-
 def load_random_he_model(folder_to_write_new_model_folder: str, name_for_new_model: str,
                          n_rays: int = 32, grid: tuple = (2, 2)) -> StarDist2D:
     configuration = Config2D(n_channel_in=3, grid=grid, n_rays=n_rays)
     model = StarDist2D(config=configuration, basedir=folder_to_write_new_model_folder, name=name_for_new_model)
     return model
-
 
 def configure_model_for_training(model: StarDist2D, use_gpu: bool = True,
                                  epochs: int = 25, learning_rate: float = 1e-6, batch_size: int = 4) -> StarDist2D:
@@ -50,7 +46,6 @@ def configure_model_for_training(model: StarDist2D, use_gpu: bool = True,
     model.config.train_batch_size = batch_size
     model.config.use_gpu = use_gpu
     return model
-
 
 def normalize_train_and_threshold(model: StarDist2D,
                         training_images: list[np.ndarray], training_masks: list[np.ndarray],

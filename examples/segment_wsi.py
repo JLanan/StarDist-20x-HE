@@ -10,4 +10,4 @@ segmentation = WSISegmenter(wsi_path, model_path, output_folder,
                                              tile_size=2048,
                                              overlap=128,
                                              n_rays=32)
-# Results are on the disk as zarrs, next steps would be to convert to tif, GeoJSON, and qpdata
+# Results are on the disk as zarrs, next steps would be to convert to tif, GeoJSON, and/or qpdata
