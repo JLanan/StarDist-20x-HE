@@ -22,9 +22,13 @@ class RegionCoExtractor:
         else:
             self.z_label = z_label
         self.level = self.detect_level()
-        self.left, self.top, self.right, self.bottom = self.mu_cp_to_pixel_boundary_ltrb()
+        self.left, self.top, self.right, self.bottom = self.mu_cp_to_pixel_boundary_ltrb()  # level 0 coordinates
         self.wsi_region = self.read_wsi_region()
-        self.z_region = read_zarr_region(self.z_label, self.left, self.top, self.right, self.bottom)
+        self.z_region = read_zarr_region(self.z_label,
+                                         self.left // (2 * self.level) if self.level > 0 else self.left,
+                                         self.top // (2 * self.level) if self.level > 0 else self.top,
+                                         self.left // (2 * self.level) + width if self.level > 0 else self.left + width,
+                                         self.top // (2 * self.level) + height if self.level > 0 else self.top + height)
 
     def detect_level(self) -> int:
         # Determine wsi level from zarr dimensions

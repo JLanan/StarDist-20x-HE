@@ -1,12 +1,12 @@
 from my_utils import wsi_processing as wsip
 from my_utils import tile_processing as tp
 
-wsi_path =  r"\\10.99.68.54\Digital pathology image lib\SenNet JHU TDA Project\SN-LW-PA-P003-B1_SNP004\Spatial transcriptomics\SNP004-sec030\S18_36012_0030.ndpi"
-z_label_path = r"\\10.99.68.54\Digital pathology image lib\SenNet JHU TDA Project\SN-LW-PA-P003-B1_SNP004\Spatial transcriptomics\SNP004-sec030\S18_36012_0030 Nuclei Segmentation\label.zarr"
-gif_out_path = r"\\10.99.68.54\Digital pathology image lib\SenNet JHU TDA Project\SN-LW-PA-P003-B1_SNP004\Spatial transcriptomics\SNP004-sec030\S18_36012_0030 Nuclei Segmentation\overlay_3.gif"
-x_mu_cp, y_mu_cp = 29300, 6100  # center point coordinates of interest in microns
+wsi_path = r"\\10.99.68.53\Digital pathology image lib\HubMap Skin TMC project\HM-SR1-Skin-P010-B1-SB01\raw_images\he.ndpi"
+z_label_path = r"Z:\WSI Results\SD_HE_20x\Skin\label.zarr"
+gif_out_path = r"Z:\WSI Results\SD_HE_20x\Skin\overlay1.gif"
+x_mu_cp, y_mu_cp = 4000, 2000  # center point coordinates of interest in microns
 width, height = 1600, 900  # pixel dimension of output image
-rgb = [255, 255, 0]  # outline color
+rgb = [0, 0, 0]  # outline color
 duration = 750  # milliseconds
 
 extractions = wsip.RegionCoExtractor(wsi_path, z_label_path, x_mu_cp, y_mu_cp, width, height)

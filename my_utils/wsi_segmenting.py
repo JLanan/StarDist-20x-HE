@@ -1,24 +1,27 @@
 from my_utils import stardisting as sd
-from my_utils import tile_processing as tp
 
 import os
 import zarr
 import numpy as np
 from tqdm import tqdm
-from skimage.transform import rescale
+from skimage.transform import rescale, resize
 OPENSLIDE_PATH = r"C:\Users\labuser\Documents\GitHub\StarDist-20x-HE\openslide-win64-20230414\bin"
 with os.add_dll_directory(OPENSLIDE_PATH):
     from openslide import OpenSlide
-    from openslide.deepzoom import DeepZoomGenerator
 
 
 class WSISegmenter:
     def __init__(self, wsi_path: str, model_path: str, output_folder: str, detect_20x: bool = False,
                  level: int = 0, scale_factor: float = False, normalize_percentiles: tuple = False,
-                 tile_size: int = 2048, overlap: int = 128):
+                 tile_size: int = 1024, overlap: int = 128):
         self.wsi_path = wsi_path
         self.wsi = OpenSlide(wsi_path)
-        self.dims = self.wsi.level_dimensions[level][::-1]
+        if detect_20x:
+            self.level = self.find_wsi_20x_level()
+        else:
+            self.level = level
+        print(f'Using level {self.level}')
+        self.dims = self.wsi.level_dimensions[self.level][::-1]
         self.output_folder = output_folder
         if '2D_versatile_he' in model_path:
             self.model = sd.load_published_he_model(
@@ -27,11 +30,6 @@ class WSISegmenter:
         else:
             self.model = sd.load_model(model_path)
         self.n_rays = self.model.config.n_rays
-        if detect_20x:
-            self.level = self.find_wsi_20x_level()
-        else:
-            self.level = level
-        print(f'Using level {self.level}')
         self.scale_factor = scale_factor
         self.normalize_percentiles = normalize_percentiles
         if self.normalize_percentiles:
@@ -39,9 +37,10 @@ class WSISegmenter:
             print('Normalization Pixel Low/High:', self.pxl_low, self.pxl_high)
         self.tile_size = tile_size
         self.overlap = overlap
-        self.tiles = self.generate_deepzoom_tiles()
+        self.lefts, self.rights, self.tops, self.bottoms = self.get_tile_set_coords()
         self.zarrs = self.init_zarrs_for_wsi_prediction()
         self.zarrs = self.seg_subroutine()
+        self.zarrs = list(self.zarrs)
         for i, name in enumerate(['label.zarr', 'centroids.zarr', 'vertices.zarr']):
             zarr.save(os.path.join(output_folder, name), self.zarrs[i])
         self.wsi.close()
@@ -75,61 +74,103 @@ class WSISegmenter:
         pxl_high = np.percentile(pixel_array, self.normalize_percentiles[1])
         return pxl_low, pxl_high
 
-    def generate_deepzoom_tiles(self) -> DeepZoomGenerator:
-        # Get lazy loading objects for Whole Slide Image and corresponding Tiles
-        return DeepZoomGenerator(self.wsi, tile_size=self.tile_size - self.overlap, overlap=self.overlap // 2)
+    def get_tile_set_coords(self):
+        height, width = self.dims
+        tile_size = self.tile_size
+        overlap = self.overlap
+        num_lefts = width // (tile_size - overlap) + 1
+        num_tops = height // (tile_size - overlap) + 1
+        lefts, rights, tops, bottoms = [], [], [], []
+        left, right, top, bottom = False, False, False, False
+        for i in range(num_lefts):
+            if i == 0:
+                left = 0
+                right = tile_size - overlap
+            elif i == 1:
+                left = tile_size - 2 * overlap
+                right += tile_size - overlap
+            else:
+                left += tile_size - overlap
+                right += tile_size - overlap
+            lefts.append(left)
+            rights.append(right)
+        for i in range(num_tops):
+            if i == 0:
+                top = 0
+                bottom = tile_size - overlap
+            elif i == 1:
+                top = tile_size - 2 * overlap
+                bottom += tile_size - overlap
+            else:
+                top += tile_size - overlap
+                bottom += tile_size - overlap
+            tops.append(top)
+            bottoms.append(bottom)
+        fix_right_edge, fix_bottom_edge = False, False
+        if width - lefts[-1] < 3 * overlap:
+            fix_right_edge = True
+        if height - tops[-1] < 3 * overlap:
+            fix_bottom_edge = True
+        if fix_right_edge:
+            lefts.pop()
+            rights.pop()
+        if fix_bottom_edge:
+            tops.pop()
+            bottoms.pop()
+        rights[-1] = width
+        bottoms[-1] = height
+        return lefts, rights, tops, bottoms
 
     def init_zarrs_for_wsi_prediction(self) -> tuple[zarr.core.Array, zarr.core.Array, zarr.core.Array]:
         # Initialize zarrs such that the first tile could be entirely covered in nuclei (overlap is ~5 nuclei across)
         safe_estimate = (self.tile_size / self.overlap * 5) ** 2
         # Initialize the arrays as zeros. Using default Blosc compression algorithm.
-        z_label = zarr.zeros(shape=self.dims, chunks=(self.tile_size, self.tile_size), dtype=np.int32)
-        z_centroids = zarr.zeros(shape=(safe_estimate, 2), chunks=(self.tile_size, 2), dtype=np.int32)
+        z_label = zarr.zeros(shape=self.dims, chunks=(self.tile_size, self.tile_size), dtype=np.uint32)
+        z_centroids = zarr.zeros(shape=(safe_estimate, 2), chunks=(self.tile_size, 2), dtype=np.uint32)
         z_vertices = zarr.zeros(shape=(safe_estimate, 2, self.n_rays),
-                                chunks=(self.tile_size, 2, self.n_rays), dtype=np.int32)
+                                chunks=(self.tile_size, 2, self.n_rays), dtype=np.uint32)
         return z_label, z_centroids, z_vertices
 
     def seg_subroutine(self) -> tuple[zarr.core.Array, zarr.core.Array, zarr.core.Array]:
         # Get columns and rows for systematic tile predictions
-        cols, rows = self.tiles.level_tiles[-1 - self.level]
+        cols, rows = len(self.lefts), len(self.tops)
 
         # Initialize object count and loop through the tile grid
-        count = 0
-        for x in tqdm(range(cols), desc='Row progression', position=1, leave=False):
+        count= 0
+        for x in tqdm(range(cols), desc='Width processed', position=1, leave=False):
             for y in tqdm(range(rows), desc='Column progression', position=2, leave=False):
                 is_first = False if count > 0 else True
 
-                # Get pixel coordinate boundaries of the square tile at specified level
-                tile_coords = self.tiles.get_tile_coordinates(
-                    level=self.tiles.level_count - self.level - 1, address=(x, y))
-                left, upper = tile_coords[0][0], tile_coords[0][1]
-                right, lower = left + tile_coords[2][0], upper + tile_coords[2][1]
-
-                # Read RGBA PIL object tile into memory, convert to RGB numpy array, and normalize
-                tile = self.tiles.get_tile(level=self.tiles.level_count - self.level - 1, address=(x, y))
+                # Get pixel coordinate boundaries of the tile at specified level. Extract region and normalize.
+                left, right, top, bottom = self.lefts[x], self.rights[x], self.tops[y], self.bottoms[y]
+                tile = self.wsi.read_region((left * 2, top * 2), self.level, (right - left, bottom - top))
+                tile = np.array(tile.convert("RGB"))
                 if not self.normalize_percentiles:
-                    tile = tp.pseudo_normalize(np.asarray(tile.convert('RGB')))
+                    tile = tile / 255
                 else:
-                    tile = (np.asarray(tile.convert('RGB')) - self.pxl_low) / (self.pxl_high - self.pxl_low)
+                    tile = (tile - self.pxl_low) / (self.pxl_high - self.pxl_low)
 
                 # Perform the prediction, override thresholds. Rescale if specified. Toss the Probabilities.
                 if self.scale_factor:
+                    height, width, channels = tile.shape
                     tile = rescale(tile, self.scale_factor, order=1, channel_axis=2)
                     label, results = self.model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
-                    label = rescale(label, 1 / self.scale_factor, order=0, anti_aliasing=False)
+                    label = resize(label, (height, width), order=0, anti_aliasing=False)
+                    results['points'] //= self.scale_factor
+                    results['coord'] //= self.scale_factor
                 else:
                     label, results = self.model.predict_instances(img=tile, predict_kwargs=dict(verbose=False))
                 del results['prob']
 
                 # Erase edge objects and shift the indexing accordingly.
-                label, results = self.erase_edge_objects(label, results, left, upper, right, lower)
+                label, results = self.erase_edge_objects(label, results, left, top, right, bottom)
 
                 # Put tile label and result coordinates into context of WSI object indexing and coordinates
-                label, results = self.globalize(label, results, count, upper, left)
+                label, results = self.globalize(label, results, count, top, left)
                 count += results['points'].shape[0]
 
                 # Record label patch onto the full zarr label. Append centroids and vertex data.
-                self.zarrs = self.update_zarrs(label, results, is_first, upper, lower, left, right)
+                self.zarrs = self.update_zarrs(label, results, is_first, top, bottom, left, right)
         return self.zarrs
 
     def erase_edge_objects(self, label: np.ndarray, results: dict, left: int, upper: int, right: int, lower: int) \
@@ -178,15 +219,16 @@ class WSISegmenter:
         z_label, z_centroids, z_vertices = self.zarrs
 
         # Convert data types to match zarrs
-        label = label.astype(np.int32)
-        results['points'] = results['points'].astype(np.int32)
-        results['coord'] = np.round(results['coord']).astype(np.int32)  # floats are rounded to int, loss of information
+        label = label.astype(np.uint32)
+        results['points'] = results['points'].astype(np.uint32)
+        results['coord'] = np.round(results['coord']).astype(np.uint32)  # floats are rounded to int, loss of information
 
         # Write in the nonzero entries of the tile label into the whole slide zarr label.
-        base = np.asarray(z_label[upper:lower, left:right], dtype=np.int32)
+        base = np.asarray(z_label[upper:lower, left:right], dtype=np.uint32)
         mask = (label != 0)
         base[mask] = label[mask]
         z_label[upper:lower, left:right] = base
+        base = np.asarray(z_label[upper:lower, left:right], dtype=np.uint32)
 
         # Append centroid and vertex results to zarrs
         detected = results['points'].shape[0]
@@ -195,9 +237,9 @@ class WSISegmenter:
             pass
         elif detected != 0 and is_first is True:
             # First time recording a detected nuclei
-            z_centroids[0:detected] = results['points']
+            z_centroids[0: detected] = results['points']
             z_centroids.resize(detected, 2)
-            z_vertices[0:detected] = results['coord']
+            z_vertices[0: detected] = results['coord']
             z_vertices.resize(detected, 2, self.n_rays)
         else:
             # Append results to existing zarr
