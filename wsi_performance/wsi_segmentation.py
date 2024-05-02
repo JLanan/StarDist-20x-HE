@@ -14,9 +14,9 @@ model_name = 'SD_HE_20x'
 
 # output_folder = fr"Z:\WSI Results\{model_name}\Fallopian_Tube"
 # output_folder = fr"Z:\WSI Results\{model_name}\Pancreas"
-output_folder = fr"Z:\WSI Results\{model_name}\Skin"
+output_folder = fr"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\{model_name}\Skin"
 
-model_path = fr"Z:\StarDist Segmentation Models\{model_name}"
+model_path = fr"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Segmentation Models\{model_name}"
 columns = ['Model', 'Tissue', 'Runtime (min)', 'Objects Detected']
 df = pd.DataFrame(columns=columns)
 
