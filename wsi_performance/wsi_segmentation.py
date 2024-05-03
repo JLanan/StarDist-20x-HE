@@ -32,7 +32,6 @@ for i, wsi_path in enumerate(wsi_paths):
                                         tile_size=1024,
                                         overlap=128)
         else:
-            print(wsi_path)
             segmentation = WSISegmenter(wsi_path, model_path, output_folder,
                                         detect_20x=True,
                                         level=0,  # overridden if detect_20x is True
