@@ -46,6 +46,6 @@ for i, wsi_path in enumerate(wsi_paths):
         df.loc[count, 'Tissue'] = wsi_path
         df.loc[count, 'Runtime (min)'] = runtime
         df.loc[count, 'Objects Detected'] = len(z_results[1])
-        [z.close() for z in z_results]
+        [0 for z in z_results]  # clear the zarrs for memory? supposedly closed automatically?
         df.to_csv(r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\metrics.csv", index=False)
         count += 1
