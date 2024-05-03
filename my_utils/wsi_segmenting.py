@@ -228,7 +228,6 @@ class WSISegmenter:
         mask = (label != 0)
         base[mask] = label[mask]
         z_label[upper:lower, left:right] = base
-        base = np.asarray(z_label[upper:lower, left:right], dtype=np.uint32)
 
         # Append centroid and vertex results to zarrs
         detected = results['points'].shape[0]

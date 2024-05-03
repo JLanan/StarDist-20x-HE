@@ -24,11 +24,12 @@ class RegionCoExtractor:
         self.level = self.detect_level()
         self.left, self.top, self.right, self.bottom = self.mu_cp_to_pixel_boundary_ltrb()  # level 0 coordinates
         self.wsi_region = self.read_wsi_region()
+        downsample_factor = self.wsi.level_dimensions[0][0] // self.wsi.level_dimensions[1][0]
         self.z_region = read_zarr_region(self.z_label,
-                                         self.left // (2 ** self.level),
-                                         self.top // (2 ** self.level),
-                                         self.left // (2 ** self.level),
-                                         self.top // (2 ** self.level))
+                                         self.left // (downsample_factor ** self.level),
+                                         self.top // (downsample_factor ** self.level),
+                                         self.left // (downsample_factor ** self.level) + width,
+                                         self.top // (downsample_factor ** self.level) + height)
 
     def detect_level(self) -> int:
         # Determine wsi level from zarr dimensions
