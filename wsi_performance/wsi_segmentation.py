@@ -16,9 +16,10 @@ model_paths = r"\\10.99.68.53\Digital pathology image lib\_Image libraries for t
 columns = ['Model', 'Tissue', 'Runtime (min)', 'Objects Detected']
 df = pd.DataFrame(columns=columns)
 
-for i, wsi_path in enumerate(wsi_paths):
+for i, wsi_path in enumerate([wsi_paths[1]]):
     for model_name in model_names:
-        output_folder = output_folders[i].replace("MODELNAME", model_name)
+        # output_folder = output_folders[i].replace("MODELNAME", model_name)
+        output_folder = output_folders[1].replace("MODELNAME", model_name)
         model_path = model_paths.replace("MODELNAME", model_name)
 
         start_time = time.time()
@@ -31,6 +32,7 @@ for i, wsi_path in enumerate(wsi_paths):
                                         tile_size=1024,
                                         overlap=128)
         else:
+            print(wsi_path)
             segmentation = WSISegmenter(wsi_path, model_path, output_folder,
                                         detect_20x=True,
                                         level=0,  # overridden if detect_20x is True

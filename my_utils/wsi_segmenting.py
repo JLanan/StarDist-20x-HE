@@ -38,6 +38,7 @@ class WSISegmenter:
         self.tile_size = tile_size
         self.overlap = overlap
         self.lefts, self.rights, self.tops, self.bottoms = self.get_tile_set_coords()
+        self.downsample_factor = self.wsi.level_dimensions[0][0] // self.wsi.level_dimensions[1][0]
         self.zarrs = self.init_zarrs_for_wsi_prediction()
         self.zarrs = self.seg_subroutine()
         self.zarrs = list(self.zarrs)
@@ -143,7 +144,9 @@ class WSISegmenter:
 
                 # Get pixel coordinate boundaries of the tile at specified level. Extract region and normalize.
                 left, right, top, bottom = self.lefts[x], self.rights[x], self.tops[y], self.bottoms[y]
-                tile = self.wsi.read_region((left * 2, top * 2), self.level, (right - left, bottom - top))
+                tile = self.wsi.read_region((left * self.downsample_factor ** self.level,
+                                             top * self.downsample_factor ** self.level),
+                                            self.level, (right - left, bottom - top))
                 tile = np.array(tile.convert("RGB"))
                 if not self.normalize_percentiles:
                     tile = tile / 255
