@@ -4,13 +4,13 @@ import time
 import numpy as np
 import pandas as pd
 
-wsi_paths = [r"\\10.99.68.53\Digital pathology image lib\JHU\Ie-Ming Shih\lymphocytes\WSIs\FTE411.ndpi",
-             r"\\10.99.68.53\Digital pathology image lib\JHU\Laura Wood\Raw image Pancreas SenPanc001\raw images\OTS-22-15061-001 - 2022-12-19 21.46.09.ndpi",
-             r"\\10.99.68.53\Digital pathology image lib\HubMap Skin TMC project\HM-SR1-Skin-P010-B1-SB01\raw_images\he.ndpi"]
+# wsi_paths = [r"\\10.99.68.53\Digital pathology image lib\JHU\Ie-Ming Shih\lymphocytes\WSIs\FTE411.ndpi",
+# wsi_paths =  [r"\\10.99.68.53\Digital pathology image lib\JHU\Laura Wood\Raw image Pancreas SenPanc001\raw images\OTS-22-15061-001 - 2022-12-19 21.46.09.ndpi",
+wsi_paths = [r"\\10.99.68.53\Digital pathology image lib\HubMap Skin TMC project\HM-SR1-Skin-P010-B1-SB01\raw_images\D010_B013_SB001_S001.ndpi"]
 model_names = ['2D_versatile_he', 'SD_HE_20x']
-output_folders = [r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\MODELNAME\Fallopian_Tube",
-                  r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\MODELNAME\Pancreas",
-                  r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\MODELNAME\Skin"]
+# output_folders = [r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\MODELNAME\Fallopian_Tube",
+# output_folders = [r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\MODELNAME\Pancreas",
+output_folders = [r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\MODELNAME\Skin"]
 model_paths = r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\StarDist Segmentation Models\MODELNAME"
 
 columns = ['Model', 'Tissue', 'Runtime (min)', 'Objects Detected']
@@ -46,6 +46,5 @@ for i, wsi_path in enumerate(wsi_paths):
         df.loc[count, 'Tissue'] = wsi_path
         df.loc[count, 'Runtime (min)'] = runtime
         df.loc[count, 'Objects Detected'] = len(z_results[1])
-        [0 for z in z_results]  # clear the zarrs for memory? supposedly closed automatically?
-        df.to_csv(r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\metrics.csv", index=False)
+        df.to_csv(r"\\10.99.68.53\Digital pathology image lib\_Image libraries for training\2023-05-09 Published HE Nuclei Datasets\WSI Results\metrics_Skin.csv", index=False)
         count += 1
