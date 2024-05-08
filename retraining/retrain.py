@@ -14,11 +14,15 @@ models_dir = r"\\10.99.68.53\Digital pathology image lib\_Image libraries for tr
 img_path = os.path.join(dataset_path, "images")
 msk_path = os.path.join(dataset_path, "masks")
 data = tp.TileSetReader([img_path, msk_path], ['.tif', '.tif']).tile_sets
-tissues = ['FallopianTube', 'Pancreas', 'Skin']
+# tissues = ['FallopianTube', 'Pancreas', 'Skin']
+tissues = ['Skin']
 starts_lrs = [('SD_HE_20x', 0.00001), ('2D_versatile_he', 0.00001), ('Random', 0.0003)]
-epochs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-          10, 20, 30, 40, 50, 60, 70, 80, 90,
-          100, 150, 200, 250]
+# starts_lrs = [('SD_HE_20x', 0.00001)]
+# epochs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+#           10, 20, 30, 40, 50, 60, 70, 80, 90,
+#           100, 150, 200, 250]
+epochs = [0, 300, 400, 500, 600, 700, 800, 900, 1000]
+# epochs = [0, 30]
 df = pd.DataFrame(columns=['Start', 'Tissue', 'LR', 'Epochs', 'Tau', 'TP', 'FP', 'FN',
                            'Precision', 'Recall', 'F1-Score', 'Panoptic Quality'])
 
@@ -106,5 +110,5 @@ for tissue in tqdm(tissues, desc='Tissue', position=1, leave=False):
             df.at[count, 'Recall'] = scores['recall']
             df.at[count, 'F1-Score'] = scores['f1']
             df.at[count, 'Panoptic Quality'] = scores['panoptic_quality']
-            df.to_csv(os.path.join(models_dir, "retraining.csv"), index=False)
+            df.to_csv(os.path.join(models_dir, "retraining_long2.csv"), index=False)
             count += 1
